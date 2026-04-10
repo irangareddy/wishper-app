@@ -7,8 +7,27 @@ final class AudioRecorder {
     private var audioBuffer: [Float] = []
     private let lock = NSLock()
     private(set) var isRecording = false
+    private var micPermissionGranted = false
 
     let sampleRate: Double = 16000
+
+    /// Check and request microphone permission once at startup (static to avoid Sendable issues)
+    static func checkMicPermission() async -> Bool {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            print("[wishper] Microphone permission: already granted")
+            return true
+        case .notDetermined:
+            let granted = await AVCaptureDevice.requestAccess(for: .audio)
+            print("[wishper] Microphone permission: \(granted ? "granted" : "denied")")
+            return granted
+        case .denied, .restricted:
+            print("[wishper] Microphone permission: denied. Open System Settings > Privacy > Microphone.")
+            return false
+        @unknown default:
+            return false
+        }
+    }
 
     func start() throws {
         guard !isRecording else { return }

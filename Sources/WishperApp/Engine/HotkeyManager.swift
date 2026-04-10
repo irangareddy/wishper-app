@@ -25,17 +25,14 @@ final class HotkeyManager {
         self.mode = mode
         self.isTargetKeyDown = false
 
-        let axTrusted = AXIsProcessTrusted()
-        print("[wishper] AXIsProcessTrusted() = \(axTrusted)")
-        print("[wishper] Hotkey target keyCode = \(targetKeyCode) (kVK_RightCommand = \(kVK_RightCommand))")
+        let trusted = AXIsProcessTrusted()
+        print("[wishper] AXIsProcessTrusted() = \(trusted)")
 
-        // Request accessibility permission — shows system prompt if not trusted
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        let trusted = AXIsProcessTrustedWithOptions(options)
-        print("[wishper] AXIsProcessTrustedWithOptions(prompt: true) = \(trusted)")
         if !trusted {
-            print("[wishper] Accessibility permission not granted. A system dialog should appear.")
-            print("[wishper] After granting, restart the app.")
+            // Only prompt if not already granted
+            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+            AXIsProcessTrustedWithOptions(options)
+            print("[wishper] Accessibility not granted — prompting user.")
         }
 
         // Try to create both monitors. NSEvent's global monitor is generally more reliable

@@ -23,7 +23,14 @@ final class PipelineCoordinator {
     func start() async {
         print("[wishper] PipelineCoordinator.start() called")
 
-        // Load models in background
+        // Check microphone permission once at startup
+        let micGranted = await AudioRecorder.checkMicPermission()
+        if !micGranted {
+            appState.statusMessage = "Microphone access denied"
+            return
+        }
+
+        // Load models
         appState.statusMessage = "Loading ASR model..."
         do {
             try await transcriber.loadModel()
