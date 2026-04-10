@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Orchestrates the full voice-to-text pipeline:
@@ -13,6 +14,7 @@ final class PipelineCoordinator {
     private let sounds = SoundPlayer()
 
     private var isProcessing = false
+    private var targetApp: NSRunningApplication?
 
     init(appState: AppState) {
         self.appState = appState
@@ -67,6 +69,9 @@ final class PipelineCoordinator {
 
     private func startRecording() {
         guard !recorder.isRecording, !isProcessing else { return }
+        // Save the frontmost app BEFORE we do anything
+        targetApp = NSWorkspace.shared.frontmostApplication
+        print("[wishper] Target app: \(targetApp?.localizedName ?? "unknown") (pid: \(targetApp?.processIdentifier ?? 0))")
         do {
             try recorder.start()
             appState.isRecording = true
@@ -129,7 +134,12 @@ final class PipelineCoordinator {
 
             appState.lastCleanedText = cleaned
 
-            // Inject
+            // Re-activate target app and inject
+            if let target = targetApp {
+                print("[wishper] Re-activating \(target.localizedName ?? "unknown")...")
+                target.activate()
+                usleep(100_000) // 100ms for app to become frontmost
+            }
             print("[wishper] Injecting text...")
             let success = injector.inject(cleaned)
             print("[wishper] Injection result: \(success)")

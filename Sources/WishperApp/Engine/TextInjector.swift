@@ -10,32 +10,28 @@ nonisolated final class TextInjector {
     ]
 
     func inject(_ text: String) -> Bool {
-        // Strategy 1: Accessibility API — insert at cursor position
+        // Always put text on clipboard first
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+
+        // Strategy 1: Accessibility API — direct insert at cursor
         if insertViaAccessibility(text) {
             print("[wishper] Injected via Accessibility API")
             return true
         }
 
-        // Strategy 2: Clipboard + CGEvent Cmd+V
-        if simulateCopyPaste(text) {
-            print("[wishper] Injected via clipboard paste")
-            return true
-        }
-
-        // Strategy 3: Clipboard only
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        print("[wishper] Text copied to clipboard — press Cmd+V to paste")
+        // Strategy 2: CGEvent Cmd+V via cghidEventTap — clipboard already set, paste immediately
+        simulatePaste()
+        print("[wishper] Injected via CGEvent Cmd+V")
         return true
     }
 
-    // MARK: - Approach 1: Accessibility API
+    // MARK: - Strategy 1: Accessibility API
 
     private func insertViaAccessibility(_ text: String) -> Bool {
         guard AXIsProcessTrusted() else { return false }
 
-        // Find focused element
         let systemWide = AXUIElementCreateSystemWide()
         var focusedRef: CFTypeRef?
         let findError = AXUIElementCopyAttributeValue(
@@ -44,29 +40,20 @@ nonisolated final class TextInjector {
         guard findError == .success, let focused = focusedRef else { return false }
         let element = focused as! AXUIElement
 
-        // Check if it's a text element
         var roleRef: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
         guard let role = roleRef as? String, Self.textElementRoles.contains(role) else {
             return false
         }
 
-        // Get current value (to verify change later)
         let currentValue = getStringValue(element, attribute: kAXValueAttribute)
-
-        // Set kAXSelectedTextAttribute to insert at cursor position
         let setResult = AXUIElementSetAttributeValue(
             element, kAXSelectedTextAttribute as CFString, text as CFTypeRef
         )
         guard setResult == .success else { return false }
 
-        // Verify the value actually changed (Google Docs/VSCode silently ignore it)
         let newValue = getStringValue(element, attribute: kAXValueAttribute)
-        if currentValue == newValue {
-            // Value didn't change — this app doesn't support AX text insertion
-            return false
-        }
-
+        if currentValue == newValue { return false }
         return true
     }
 
@@ -77,26 +64,29 @@ nonisolated final class TextInjector {
         return value as? String
     }
 
-    // MARK: - Approach 2: Clipboard + CGEvent Cmd+V
+    // MARK: - Strategy 2: CGEvent Cmd+V (Wispr Flow's approach)
 
-    private func simulateCopyPaste(_ text: String) -> Bool {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        guard pasteboard.setString(text, forType: .string) else { return false }
-
-        simulateKeyPress(key: CGKeyCode(kVK_ANSI_V), flags: .maskCommand)
-        return true
-    }
-
-    private func simulateKeyPress(key: CGKeyCode, flags: CGEventFlags? = nil) {
+    private func simulatePaste() {
         let source = CGEventSource(stateID: .hidSystemState)
-        let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true)
-        let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)
-        if let flags {
-            down?.flags = flags
-            up?.flags = flags
-        }
-        down?.post(tap: .cghidEventTap)
-        up?.post(tap: .cghidEventTap)
+
+        // Key down: Cmd+V
+        let keyDown = CGEvent(
+            keyboardEventSource: source,
+            virtualKey: CGKeyCode(kVK_ANSI_V),
+            keyDown: true
+        )
+        keyDown?.flags = .maskCommand
+        keyDown?.post(tap: .cghidEventTap)
+
+        usleep(10_000) // 10ms
+
+        // Key up: Cmd+V
+        let keyUp = CGEvent(
+            keyboardEventSource: source,
+            virtualKey: CGKeyCode(kVK_ANSI_V),
+            keyDown: false
+        )
+        keyUp?.flags = .maskCommand
+        keyUp?.post(tap: .cghidEventTap)
     }
 }
