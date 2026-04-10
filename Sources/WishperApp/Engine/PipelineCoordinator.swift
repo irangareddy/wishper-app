@@ -134,14 +134,10 @@ final class PipelineCoordinator {
 
             appState.lastCleanedText = cleaned
 
-            // Re-activate target app and inject
-            if let target = targetApp {
-                print("[wishper] Re-activating \(target.localizedName ?? "unknown")...")
-                target.activate()
-                usleep(100_000) // 100ms for app to become frontmost
-            }
-            print("[wishper] Injecting text...")
-            let success = injector.inject(cleaned)
+            // Inject directly to target app's PID (bypasses focus-stealing)
+            let targetPID = targetApp?.processIdentifier
+            print("[wishper] Injecting to PID \(targetPID ?? 0) (\(targetApp?.localizedName ?? "unknown"))...")
+            let success = injector.inject(cleaned, targetPID: targetPID)
             print("[wishper] Injection result: \(success)")
             if success {
                 appState.statusMessage = "Ready"

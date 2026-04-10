@@ -9,7 +9,8 @@ nonisolated final class TextInjector {
         kAXTextFieldRole, kAXTextAreaRole,
     ]
 
-    func inject(_ text: String) -> Bool {
+    /// Inject text into the target app. Pass the target app's PID to bypass focus issues.
+    func inject(_ text: String, targetPID: pid_t? = nil) -> Bool {
         // Always put text on clipboard first
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -21,9 +22,16 @@ nonisolated final class TextInjector {
             return true
         }
 
-        // Strategy 2: CGEvent Cmd+V via cghidEventTap — clipboard already set, paste immediately
+        // Strategy 2: postToPid — delivers Cmd+V directly to target process, bypasses focus
+        if let pid = targetPID {
+            simulatePasteToPID(pid)
+            print("[wishper] Injected via CGEvent postToPid(\(pid))")
+            return true
+        }
+
+        // Strategy 3: Post to session (fallback if no PID)
         simulatePaste()
-        print("[wishper] Injected via CGEvent Cmd+V")
+        print("[wishper] Injected via CGEvent Cmd+V (session)")
         return true
     }
 
@@ -64,29 +72,52 @@ nonisolated final class TextInjector {
         return value as? String
     }
 
-    // MARK: - Strategy 2: CGEvent Cmd+V (Wispr Flow's approach)
+    // MARK: - Strategy 2: postToPid (bypasses focus entirely)
 
-    private func simulatePaste() {
+    private func simulatePasteToPID(_ pid: pid_t) {
         let source = CGEventSource(stateID: .hidSystemState)
 
-        // Key down: Cmd+V
         let keyDown = CGEvent(
             keyboardEventSource: source,
             virtualKey: CGKeyCode(kVK_ANSI_V),
             keyDown: true
         )
-        keyDown?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
-
-        usleep(10_000) // 10ms
-
-        // Key up: Cmd+V
         let keyUp = CGEvent(
             keyboardEventSource: source,
             virtualKey: CGKeyCode(kVK_ANSI_V),
             keyDown: false
         )
+
+        keyDown?.flags = .maskCommand
         keyUp?.flags = .maskCommand
+
+        // Deliver directly to target process — skips window server focus check
+        keyDown?.postToPid(pid)
+        usleep(10_000) // 10ms
+        keyUp?.postToPid(pid)
+    }
+
+    // MARK: - Strategy 3: Post to session (fallback)
+
+    private func simulatePaste() {
+        let source = CGEventSource(stateID: .hidSystemState)
+
+        let keyDown = CGEvent(
+            keyboardEventSource: source,
+            virtualKey: CGKeyCode(kVK_ANSI_V),
+            keyDown: true
+        )
+        let keyUp = CGEvent(
+            keyboardEventSource: source,
+            virtualKey: CGKeyCode(kVK_ANSI_V),
+            keyDown: false
+        )
+
+        keyDown?.flags = .maskCommand
+        keyUp?.flags = .maskCommand
+
+        keyDown?.post(tap: .cghidEventTap)
+        usleep(10_000)
         keyUp?.post(tap: .cghidEventTap)
     }
 }
