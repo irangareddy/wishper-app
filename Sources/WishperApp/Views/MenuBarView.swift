@@ -40,8 +40,8 @@ struct MenuBarView: View {
             
             // Footer
             HStack {
-                Button("Settings...") {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                SettingsLink {
+                    Text("Settings...")
                 }
                 Spacer()
                 Button("Quit") {

@@ -15,22 +15,52 @@ final class AudioRecorder {
         audioBuffer = []
 
         let inputNode = engine.inputNode
-        let recordingFormat = AVAudioFormat(
+        // Use the hardware's native format — don't force 16kHz
+        let hardwareFormat = inputNode.outputFormat(forBus: 0)
+        print("[wishper] Mic hardware format: \(hardwareFormat)")
+
+        let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: sampleRate,
             channels: 1,
             interleaved: false
         )!
 
-        // Install tap on input node
+        // Create a converter from hardware format to 16kHz mono
+        guard let converter = AVAudioConverter(from: hardwareFormat, to: targetFormat) else {
+            throw AudioRecorderError.converterCreationFailed
+        }
+
         inputNode.installTap(
             onBus: 0,
-            bufferSize: 1024,
-            format: recordingFormat
+            bufferSize: 4096,
+            format: hardwareFormat
         ) { [weak self] (buffer: AVAudioPCMBuffer, _: AVAudioTime) in
             guard let self else { return }
-            let channelData = buffer.floatChannelData![0]
-            let frameCount = Int(buffer.frameLength)
+
+            // Calculate output frame count based on sample rate ratio
+            let ratio = self.sampleRate / hardwareFormat.sampleRate
+            let outputFrameCount = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
+            guard outputFrameCount > 0 else { return }
+
+            guard let outputBuffer = AVAudioPCMBuffer(
+                pcmFormat: targetFormat,
+                frameCapacity: outputFrameCount
+            ) else { return }
+
+            var error: NSError?
+            converter.convert(to: outputBuffer, error: &error) { _, outStatus in
+                outStatus.pointee = .haveData
+                return buffer
+            }
+
+            if let error {
+                print("[wishper] Audio conversion error: \(error)")
+                return
+            }
+
+            let channelData = outputBuffer.floatChannelData![0]
+            let frameCount = Int(outputBuffer.frameLength)
             let samples = Array(UnsafeBufferPointer(start: channelData, count: frameCount))
 
             self.lock.lock()
@@ -41,6 +71,7 @@ final class AudioRecorder {
         engine.prepare()
         try engine.start()
         isRecording = true
+        print("[wishper] Recording started (\(hardwareFormat.sampleRate)Hz -> \(sampleRate)Hz)")
     }
 
     func stop() {
@@ -48,6 +79,7 @@ final class AudioRecorder {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isRecording = false
+        print("[wishper] Recording stopped, \(audioBuffer.count) samples captured")
     }
 
     func getAudio() -> [Float] {
@@ -78,5 +110,9 @@ final class AudioRecorder {
         lock.lock()
         defer { lock.unlock() }
         return Double(audioBuffer.count) / sampleRate
+    }
+
+    enum AudioRecorderError: Error {
+        case converterCreationFailed
     }
 }

@@ -8,7 +8,7 @@ final class AppState: ObservableObject {
     var isCleaning = false
     var lastTranscription = ""
     var lastCleanedText = ""
-    var selectedASRModel = "argmaxinc/whisperkit-coreml-large-v3-turbo"
+    var selectedASRModel = "aufklarer/Qwen3-ASR-0.6B-MLX-4bit"
     var selectedLLMModel = "mlx-community/Qwen3-0.6B-4bit"
     var cleanupEnabled = true
     var hotkeyMode = "push_to_talk"  // push_to_talk, toggle, vad_assisted

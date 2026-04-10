@@ -16,8 +16,13 @@ actor Cleaner {
 
     func loadModel() async throws {
         guard enabled else { return }
+        print("[wishper] LLM: Loading \(modelName)...")
         let configuration = ModelConfiguration(id: modelName)
-        model = try await LLMModelFactory.shared.loadContainer(configuration: configuration)
+        model = try await LLMModelFactory.shared.loadContainer(configuration: configuration) { progress in
+            let pct = Int(progress.fractionCompleted * 100)
+            print("[wishper] LLM: \(pct)%")
+        }
+        print("[wishper] LLM: Model loaded")
     }
 
     func clean(rawText: String, appContext: String = "") async throws -> String {
@@ -26,7 +31,7 @@ actor Cleaner {
 
         let toneLine = appContext.isEmpty ? "" : "- Tone: \(appContext)\n"
         let systemPrompt = """
-        You are a dictation cleanup assistant. Your ONLY job is to clean raw dictated text.
+        You are a dictation cleanup assistant. Your ONLY job is to clean raw dictated text. /no_think
 
         Rules:
         - Remove ALL filler words: um, uh, like, you know, so, basically, actually, I mean, kind of, sort of
@@ -36,6 +41,7 @@ actor Cleaner {
         - Keep the FULL original meaning — do not summarize, truncate, or shorten
         - Keep ALL sentences — do not drop or merge sentences
         - Output ONLY the cleaned text, nothing else
+        - Do NOT think, reason, or explain — just output the cleaned text
         - Do NOT explain, comment, or think out loud
         - The output should be roughly the same length as the input
         \(toneLine)
@@ -65,9 +71,16 @@ actor Cleaner {
 
         var output = outputText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Strip thinking tags if present
-        if let range = output.range(of: "<think>.*?</think>", options: .regularExpression) {
-            output = output.replacingCharacters(in: range, with: "")
+        // Strip all <think> content — closed or unclosed
+        if let thinkStart = output.range(of: "<think>") {
+            if let thinkEnd = output.range(of: "</think>") {
+                // Closed tag — remove the block and keep text after
+                let afterThink = output[thinkEnd.upperBound...]
+                output = String(afterThink)
+            } else {
+                // Unclosed tag (thinking overflowed max tokens) — keep text before
+                output = String(output[..<thinkStart.lowerBound])
+            }
         }
         // Strip leading fillers
         let fillerPattern = "^(So,?\\s*|Like,?\\s*|Well,?\\s*|I mean,?\\s*)"

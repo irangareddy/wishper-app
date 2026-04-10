@@ -24,7 +24,9 @@ struct WishperApp: App {
         _appState = StateObject(wrappedValue: state)
         let coord = PipelineCoordinator(appState: state)
         _coordinator = State(initialValue: coord)
+        print("[wishper] WishperApp init: created PipelineCoordinator and scheduling start()")
         Task { @MainActor in
+            print("[wishper] WishperApp init: calling PipelineCoordinator.start()")
             await coord.start()
         }
     }

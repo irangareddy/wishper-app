@@ -21,14 +21,19 @@ final class PipelineCoordinator {
     }
 
     func start() async {
+        print("[wishper] PipelineCoordinator.start() called")
+
         // Load models in background
         appState.statusMessage = "Loading ASR model..."
         do {
             try await transcriber.loadModel()
+            print("[wishper] ASR model loaded successfully")
             appState.statusMessage = "Loading LLM model..."
             try await cleaner.loadModel()
+            print("[wishper] LLM model loaded successfully")
             appState.statusMessage = "Ready"
         } catch {
+            print("[wishper] Model load error: \(error)")
             appState.statusMessage = "Model load failed: \(error.localizedDescription)"
             return
         }
@@ -44,6 +49,7 @@ final class PipelineCoordinator {
                 await self?.stopAndProcess()
             }
         }
+        print("[wishper] PipelineCoordinator.start(): starting HotkeyManager in \(modeDescription(.pushToTalk)) mode")
         hotkeyManager.start(mode: .pushToTalk)
     }
 
@@ -66,29 +72,40 @@ final class PipelineCoordinator {
     }
 
     private func stopAndProcess() async {
-        guard recorder.isRecording else { return }
+        print("[wishper] stopAndProcess() called, isRecording=\(recorder.isRecording)")
+        guard recorder.isRecording else {
+            print("[wishper] stopAndProcess() skipped — not recording")
+            return
+        }
         recorder.stop()
         appState.isRecording = false
         if appState.soundsEnabled { sounds.stopRecording() }
 
-        guard !recorder.isSilent() else {
+        let silent = recorder.isSilent()
+        print("[wishper] isSilent=\(silent), audioSamples=\(recorder.getAudio().count)")
+        guard !silent else {
             appState.statusMessage = "No speech detected"
             return
         }
 
         isProcessing = true
         let audio = recorder.getAudio()
+        print("[wishper] Audio ready: \(audio.count) samples (\(Double(audio.count)/16000.0)s)")
 
         // Transcribe
         appState.isTranscribing = true
         appState.statusMessage = "Transcribing..."
+        print("[wishper] Starting transcription...")
         do {
+            print("[wishper] Calling transcriber.transcribe()...")
             let raw = try await transcriber.transcribe(audioArray: audio)
+            print("[wishper] Transcription result: \"\(raw)\"")
             appState.lastTranscription = raw
             appState.isTranscribing = false
 
             // Voice commands
             let afterCommands = VoiceCommands.process(raw)
+            print("[wishper] After voice commands: \"\(afterCommands)\"")
 
             // LLM cleanup
             var cleaned = afterCommands
@@ -97,14 +114,18 @@ final class PipelineCoordinator {
                 appState.statusMessage = "Cleaning..."
                 let app = AppContext.getActiveApp()
                 let tone = AppContext.getTone(for: app)
+                print("[wishper] Cleaning with tone: \(tone) (app: \(app))")
                 cleaned = try await cleaner.clean(rawText: afterCommands, appContext: tone)
+                print("[wishper] Cleaned result: \"\(cleaned)\"")
                 appState.isCleaning = false
             }
 
             appState.lastCleanedText = cleaned
 
             // Inject
+            print("[wishper] Injecting text...")
             let success = injector.inject(cleaned)
+            print("[wishper] Injection result: \(success)")
             if success {
                 appState.statusMessage = "Ready"
                 appState.addToHistory(raw: raw, cleaned: cleaned)
@@ -121,5 +142,14 @@ final class PipelineCoordinator {
         }
 
         isProcessing = false
+    }
+
+    private func modeDescription(_ mode: HotkeyManager.HotkeyMode) -> String {
+        switch mode {
+        case .pushToTalk:
+            "pushToTalk"
+        case .toggle:
+            "toggle"
+        }
     }
 }
