@@ -84,20 +84,19 @@ nonisolated final class TextInjector {
         pasteboard.clearContents()
         guard pasteboard.setString(text, forType: .string) else { return false }
 
-        // Use cghidEventTap (not cgSessionEventTap) for proper keystroke simulation
-        simulateKeyDown(key: CGKeyCode(kVK_ANSI_V), with: .maskCommand)
-
+        simulateKeyPress(key: CGKeyCode(kVK_ANSI_V), flags: .maskCommand)
         return true
     }
 
-    private func simulateKeyDown(key: CGKeyCode, with flags: CGEventFlags? = nil) {
+    private func simulateKeyPress(key: CGKeyCode, flags: CGEventFlags? = nil) {
         let source = CGEventSource(stateID: .hidSystemState)
-        let event = CGEvent(
-            keyboardEventSource: source,
-            virtualKey: key,
-            keyDown: true
-        )
-        if let flags { event?.flags = flags }
-        event?.post(tap: .cghidEventTap)
+        let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true)
+        let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)
+        if let flags {
+            down?.flags = flags
+            up?.flags = flags
+        }
+        down?.post(tap: .cghidEventTap)
+        up?.post(tap: .cghidEventTap)
     }
 }
