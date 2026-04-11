@@ -23,10 +23,8 @@ struct GeneralSettingsView: View {
     
     var body: some View {
         Form {
-            Picker("Hotkey Mode", selection: $appState.hotkeyMode) {
-                Text("Push to Talk").tag("push_to_talk")
-                Text("Toggle").tag("toggle")
-                Text("VAD Assisted").tag("vad_assisted")
+            LabeledContent("Shortcut") {
+                ShortcutRecorderView(configuration: $appState.hotkeyConfig)
             }
             Toggle("LLM Cleanup", isOn: $appState.cleanupEnabled)
             Toggle("Sound Effects", isOn: $appState.soundsEnabled)

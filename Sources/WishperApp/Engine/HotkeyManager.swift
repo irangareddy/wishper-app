@@ -17,12 +17,22 @@ final class HotkeyManager {
     private var mode: HotkeyMode = .pushToTalk
     private var isToggled = false
     private var isTargetKeyDown = false
+    private var targetKeyCode: CGKeyCode = CGKeyCode(kVK_RightCommand)
+    private var targetModifiers: NSEvent.ModifierFlags = []
 
-    // Right Command key
-    private let targetKeyCode = CGKeyCode(kVK_RightCommand)
+    func configure(keyCode: CGKeyCode, modifiers: NSEvent.ModifierFlags = []) {
+        self.targetKeyCode = keyCode
+        self.targetModifiers = modifiers
+    }
 
-    func start(mode: HotkeyMode = .pushToTalk) {
+    func start(
+        mode: HotkeyMode = .pushToTalk,
+        keyCode: CGKeyCode = CGKeyCode(kVK_RightCommand),
+        modifiers: NSEvent.ModifierFlags = []
+    ) {
         self.mode = mode
+        self.targetKeyCode = keyCode
+        self.targetModifiers = modifiers
         self.isTargetKeyDown = false
 
         let trusted = AXIsProcessTrusted()
@@ -79,7 +89,7 @@ final class HotkeyManager {
         CGEvent.tapEnable(tap: tap, enable: true)
         print("[wishper] CGEvent tap created: valid=\(CFMachPortIsValid(tap))")
         print("[wishper] CGEvent.tapEnable(tap, true) called")
-        print("[wishper] Hotkey event tap active (Right Cmd)")
+        print("[wishper] Hotkey event tap active for keyCode=\(targetKeyCode) modifiers=\(targetModifiers.rawValue)")
     }
 
     private func createGlobalMonitor() {
@@ -124,51 +134,62 @@ final class HotkeyManager {
         }
 
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
-        let flags = event.flags
-        print("[wishper] CGEvent: type=\(type.rawValue) keyCode=\(keyCode) flags=\(flags.rawValue) target=\(targetKeyCode)")
-        guard keyCode == targetKeyCode else { return }
+        let flags = normalizedModifierFlags(from: event.flags)
+        print("[wishper] CGEvent: type=\(type.rawValue) keyCode=\(keyCode) flags=\(flags.rawValue) target=\(targetKeyCode) targetModifiers=\(targetModifiers.rawValue)")
 
-        let isPressed = switch type {
+        switch type {
         case .flagsChanged:
-            flags.contains(.maskCommand)
+            guard isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
+            guard let modifierFlag = modifierFlag(for: keyCode) else { return }
+            processTargetKeyTransition(
+                isPressed: flags.contains(modifierFlag),
+                source: "CGEvent"
+            )
         case .keyDown:
-            true
+            guard !isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
+            guard flags == normalizedTargetModifiers else { return }
+            processTargetKeyTransition(isPressed: true, source: "CGEvent")
         case .keyUp:
-            false
+            guard !isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
+            processTargetKeyTransition(isPressed: false, source: "CGEvent")
         default:
-            flags.contains(.maskCommand)
+            return
         }
-
-        processTargetKeyTransition(isPressed: isPressed, source: "CGEvent")
     }
 
     private func handleEvent(event: NSEvent) {
         let keyCode = CGKeyCode(event.keyCode)
-        print("[wishper] NSEvent: type=\(event.type.rawValue) keyCode=\(keyCode) modifierFlags=\(event.modifierFlags.rawValue) target=\(targetKeyCode)")
-        guard keyCode == targetKeyCode else { return }
+        let modifiers = normalizedModifierFlags(from: event.modifierFlags)
+        print("[wishper] NSEvent: type=\(event.type.rawValue) keyCode=\(keyCode) modifierFlags=\(modifiers.rawValue) target=\(targetKeyCode) targetModifiers=\(targetModifiers.rawValue)")
 
-        let isPressed = switch event.type {
+        switch event.type {
         case .flagsChanged:
-            event.modifierFlags.contains(.command)
+            guard isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
+            guard let modifierFlag = modifierFlag(for: keyCode) else { return }
+            processTargetKeyTransition(
+                isPressed: modifiers.contains(modifierFlag),
+                source: "NSEvent"
+            )
         case .keyDown:
-            true
+            guard !isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
+            guard modifiers == normalizedTargetModifiers else { return }
+            processTargetKeyTransition(isPressed: true, source: "NSEvent")
         case .keyUp:
-            false
+            guard !isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
+            processTargetKeyTransition(isPressed: false, source: "NSEvent")
         default:
-            event.modifierFlags.contains(.command)
+            return
         }
-
-        processTargetKeyTransition(isPressed: isPressed, source: "NSEvent")
     }
 
     private func processTargetKeyTransition(isPressed: Bool, source: String) {
         guard isPressed != isTargetKeyDown else {
-            print("[wishper] \(source): ignoring duplicate Right Command state \(isPressed)")
+            print("[wishper] \(source): ignoring duplicate hotkey state \(isPressed)")
             return
         }
 
         isTargetKeyDown = isPressed
-        print("[wishper] \(source): Right Command \(isPressed ? "pressed" : "released")")
+        print("[wishper] \(source): hotkey \(isPressed ? "pressed" : "released")")
 
         switch mode {
         case .pushToTalk:
@@ -187,6 +208,57 @@ final class HotkeyManager {
                     onRecordingStart?()
                 }
             }
+        }
+    }
+
+    private var isModifierOnlyHotkey: Bool {
+        normalizedTargetModifiers.isEmpty && modifierFlag(for: targetKeyCode) != nil
+    }
+
+    private var normalizedTargetModifiers: NSEvent.ModifierFlags {
+        normalizedModifierFlags(from: targetModifiers)
+    }
+
+    private func normalizedModifierFlags(from flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
+        flags.intersection([.command, .control, .option, .shift, .function])
+    }
+
+    private func normalizedModifierFlags(from flags: CGEventFlags) -> NSEvent.ModifierFlags {
+        var modifiers: NSEvent.ModifierFlags = []
+
+        if flags.contains(.maskCommand) {
+            modifiers.insert(.command)
+        }
+        if flags.contains(.maskControl) {
+            modifiers.insert(.control)
+        }
+        if flags.contains(.maskAlternate) {
+            modifiers.insert(.option)
+        }
+        if flags.contains(.maskShift) {
+            modifiers.insert(.shift)
+        }
+        if flags.contains(.maskSecondaryFn) {
+            modifiers.insert(.function)
+        }
+
+        return modifiers
+    }
+
+    private func modifierFlag(for keyCode: CGKeyCode) -> NSEvent.ModifierFlags? {
+        switch Int(keyCode) {
+        case Int(kVK_Command), Int(kVK_RightCommand):
+            return .command
+        case Int(kVK_Shift), Int(kVK_RightShift):
+            return .shift
+        case Int(kVK_Control), Int(kVK_RightControl):
+            return .control
+        case Int(kVK_Option), Int(kVK_RightOption):
+            return .option
+        case Int(kVK_Function):
+            return .function
+        default:
+            return nil
         }
     }
 }

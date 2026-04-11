@@ -58,8 +58,13 @@ final class PipelineCoordinator {
                 await self?.stopAndProcess()
             }
         }
-        print("[wishper] PipelineCoordinator.start(): starting HotkeyManager in \(modeDescription(.pushToTalk)) mode")
-        hotkeyManager.start(mode: .pushToTalk)
+        let config = appState.hotkeyConfig
+        print("[wishper] PipelineCoordinator.start(): hotkey=\(config.displayString) mode=pushToTalk")
+        hotkeyManager.start(
+            mode: .pushToTalk,
+            keyCode: config.keyCode,
+            modifiers: config.modifierFlags
+        )
     }
 
     func stop() {
