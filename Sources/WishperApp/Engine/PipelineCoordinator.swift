@@ -162,6 +162,9 @@ final class PipelineCoordinator {
             if success {
                 appState.statusMessage = "Ready"
                 appState.addToHistory(raw: raw, cleaned: cleaned)
+                let duration = Double(audio.count) / 16000.0
+                let appName = targetApp?.localizedName ?? "Unknown"
+                appState.stats.recordTranscription(text: cleaned, durationSeconds: duration, appName: appName)
                 overlay.show(state: .done)
                 scheduleOverlayHide()
                 if appState.soundsEnabled { sounds.done() }

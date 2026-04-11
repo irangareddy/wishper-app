@@ -15,6 +15,7 @@ final class AppState: ObservableObject {
     var hotkeyConfig = HotkeyConfiguration.rightCommand
     var soundsEnabled = true
     var statusMessage = "Ready"
+    let stats = StatsTracker()
     
     // Transcript history
     var history: [(date: Date, raw: String, cleaned: String)] = []

@@ -33,7 +33,7 @@ struct HomeView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Welcome to Wishper")
                     .font(.largeTitle)
@@ -44,29 +44,58 @@ struct HomeView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Spacer()
-
-            StatView(value: "\(appState.history.count)", label: "Transcripts")
+            HStack(spacing: 16) {
+                StatCard(
+                    value: "\(appState.stats.weeklyStreak)",
+                    label: "Week Streak",
+                    emoji: appState.stats.weeklyStreak >= 4 ? "⭐" : "📅"
+                )
+                StatCard(
+                    value: "\(appState.stats.averageWPM)",
+                    label: "Avg WPM",
+                    emoji: appState.stats.averageWPM >= 100 ? "🏆" : "⚡"
+                )
+                StatCard(
+                    value: formatNumber(appState.stats.totalWords),
+                    label: "Total Words",
+                    emoji: appState.stats.totalWords >= 10000 ? "🚀" : "📝"
+                )
+                StatCard(
+                    value: "\(appState.stats.appsUsed.count)",
+                    label: "Apps Used",
+                    emoji: appState.stats.appsUsed.count >= 10 ? "🏆" : "📱"
+                )
+            }
         }
     }
 }
 
-struct StatView: View {
+struct StatCard: View {
     let value: String
     let label: String
+    let emoji: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(value)
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
+        VStack(spacing: 4) {
+            HStack(spacing: 4) {
+                Text(value)
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(emoji)
+            }
             Text(label)
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
     }
+}
+
+func formatNumber(_ n: Int) -> String {
+    if n >= 1000 { return String(format: "%.1fK", Double(n) / 1000.0) }
+    return "\(n)"
 }
 
 struct TranscriptRow: View {
