@@ -10,6 +10,7 @@ final class HotkeyManager {
 
     var onRecordingStart: (@Sendable () -> Void)?
     var onRecordingStop: (@Sendable () -> Void)?
+    var onCancel: (@Sendable () -> Void)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -137,6 +138,11 @@ final class HotkeyManager {
         let flags = normalizedModifierFlags(from: event.flags)
         print("[wishper] CGEvent: type=\(type.rawValue) keyCode=\(keyCode) flags=\(flags.rawValue) target=\(targetKeyCode) targetModifiers=\(targetModifiers.rawValue)")
 
+        if type == .keyDown, keyCode == 53 {
+            onCancel?()
+            return
+        }
+
         switch type {
         case .flagsChanged:
             guard isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
@@ -161,6 +167,11 @@ final class HotkeyManager {
         let keyCode = CGKeyCode(event.keyCode)
         let modifiers = normalizedModifierFlags(from: event.modifierFlags)
         print("[wishper] NSEvent: type=\(event.type.rawValue) keyCode=\(keyCode) modifierFlags=\(modifiers.rawValue) target=\(targetKeyCode) targetModifiers=\(targetModifiers.rawValue)")
+
+        if event.type == .keyDown, keyCode == 53 {
+            onCancel?()
+            return
+        }
 
         switch event.type {
         case .flagsChanged:

@@ -20,7 +20,10 @@ struct WishperApp: App {
 
         Settings {
             SettingsView(appState: appState)
+                .navigationTitle("Settings")
         }
+        .defaultSize(width: 500, height: 400)
+        .windowResizability(.contentSize)
     }
 
     init() {

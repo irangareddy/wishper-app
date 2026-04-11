@@ -12,9 +12,11 @@ final class PipelineCoordinator {
     private let injector = TextInjector()
     private let hotkeyManager = HotkeyManager()
     private let sounds = SoundPlayer()
+    private let overlay = RecordingOverlayController()
 
     private var isProcessing = false
     private var targetApp: NSRunningApplication?
+    private var overlayHideTask: Task<Void, Never>?
 
     init(appState: AppState) {
         self.appState = appState
@@ -58,6 +60,11 @@ final class PipelineCoordinator {
                 await self?.stopAndProcess()
             }
         }
+        hotkeyManager.onCancel = { [weak self] in
+            Task { @MainActor in
+                self?.cancelRecording()
+            }
+        }
         let config = appState.hotkeyConfig
         print("[wishper] PipelineCoordinator.start(): hotkey=\(config.displayString) mode=pushToTalk")
         hotkeyManager.start(
@@ -70,10 +77,13 @@ final class PipelineCoordinator {
     func stop() {
         hotkeyManager.stop()
         recorder.stop()
+        cancelOverlayHide()
+        overlay.hide()
     }
 
     private func startRecording() {
         guard !recorder.isRecording, !isProcessing else { return }
+        cancelOverlayHide()
         // Save the frontmost app BEFORE we do anything
         targetApp = NSWorkspace.shared.frontmostApplication
         print("[wishper] Target app: \(targetApp?.localizedName ?? "unknown") (pid: \(targetApp?.processIdentifier ?? 0))")
@@ -81,9 +91,11 @@ final class PipelineCoordinator {
             try recorder.start()
             appState.isRecording = true
             appState.statusMessage = "Recording..."
+            overlay.show(state: .recording)
             if appState.soundsEnabled { sounds.startRecording() }
         } catch {
             appState.statusMessage = "Mic error: \(error.localizedDescription)"
+            overlay.hide()
             if appState.soundsEnabled { sounds.error() }
         }
     }
@@ -102,6 +114,7 @@ final class PipelineCoordinator {
         print("[wishper] isSilent=\(silent), audioSamples=\(recorder.getAudio().count)")
         guard !silent else {
             appState.statusMessage = "No speech detected"
+            overlay.hide()
             return
         }
 
@@ -112,6 +125,7 @@ final class PipelineCoordinator {
         // Transcribe
         appState.isTranscribing = true
         appState.statusMessage = "Transcribing..."
+        overlay.show(state: .transcribing)
         print("[wishper] Starting transcription...")
         do {
             print("[wishper] Calling transcriber.transcribe()...")
@@ -129,6 +143,7 @@ final class PipelineCoordinator {
             if appState.cleanupEnabled {
                 appState.isCleaning = true
                 appState.statusMessage = "Cleaning..."
+                overlay.show(state: .cleaning)
                 let app = AppContext.getActiveApp()
                 let tone = AppContext.getTone(for: app)
                 print("[wishper] Cleaning with tone: \(tone) (app: \(app))")
@@ -147,19 +162,54 @@ final class PipelineCoordinator {
             if success {
                 appState.statusMessage = "Ready"
                 appState.addToHistory(raw: raw, cleaned: cleaned)
+                overlay.show(state: .done)
+                scheduleOverlayHide()
                 if appState.soundsEnabled { sounds.done() }
             } else {
                 appState.statusMessage = "Paste failed"
+                overlay.hide()
                 if appState.soundsEnabled { sounds.error() }
             }
         } catch {
             appState.statusMessage = "Error: \(error.localizedDescription)"
             appState.isTranscribing = false
             appState.isCleaning = false
+            overlay.hide()
             if appState.soundsEnabled { sounds.error() }
         }
 
         isProcessing = false
+    }
+
+    private func cancelRecording() {
+        recorder.stop()
+        cancelOverlayHide()
+        isProcessing = false
+        appState.isRecording = false
+        appState.isTranscribing = false
+        appState.isCleaning = false
+        appState.statusMessage = "Cancelled"
+        overlay.hide()
+        if appState.soundsEnabled { sounds.error() }
+        print("[wishper] Recording cancelled")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            self?.appState.statusMessage = "Ready"
+        }
+    }
+
+    private func scheduleOverlayHide() {
+        cancelOverlayHide()
+        overlayHideTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard let self, !self.recorder.isRecording else { return }
+            self.overlay.hide()
+            self.overlayHideTask = nil
+        }
+    }
+
+    private func cancelOverlayHide() {
+        overlayHideTask?.cancel()
+        overlayHideTask = nil
     }
 
     private func modeDescription(_ mode: HotkeyManager.HotkeyMode) -> String {
