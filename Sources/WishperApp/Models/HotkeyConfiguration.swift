@@ -39,15 +39,17 @@ struct HotkeyConfiguration: Codable, Equatable {
         return "None"
     }
 
+    // Modifier-only hotkeys: modifierFlagsRawValue must be 0
+    // The keyCode itself IS the modifier — no additional modifiers needed
     static let rightCommand = HotkeyConfiguration(
-        modifierFlagsRawValue: NSEvent.ModifierFlags.command.rawValue,
-        keyCode: 54,
+        modifierFlagsRawValue: 0,
+        keyCode: 54,  // kVK_RightCommand
         keyChar: nil
     )
 
     static let fn = HotkeyConfiguration(
-        modifierFlagsRawValue: NSEvent.ModifierFlags.function.rawValue,
-        keyCode: 63,
+        modifierFlagsRawValue: 0,
+        keyCode: 63,  // kVK_Function
         keyChar: nil
     )
 
