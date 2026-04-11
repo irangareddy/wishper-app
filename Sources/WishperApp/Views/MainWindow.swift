@@ -5,21 +5,21 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case dictionary = "Dictionary"
     case snippets = "Snippets"
     case style = "Style"
+    case settings = "Settings"
 
     var id: String { rawValue }
 
     var icon: String {
         switch self {
-        case .home:
-            "house"
-        case .dictionary:
-            "book.closed"
-        case .snippets:
-            "text.badge.plus"
-        case .style:
-            "paintbrush"
+        case .home: "house"
+        case .dictionary: "book.closed"
+        case .snippets: "text.badge.plus"
+        case .style: "paintbrush"
+        case .settings: "gearshape"
         }
     }
+
+    var isBottom: Bool { self == .settings }
 }
 
 struct MainWindowView: View {
@@ -29,7 +29,7 @@ struct MainWindowView: View {
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
-                List(SidebarItem.allCases, selection: $selectedItem) { item in
+                List(SidebarItem.allCases.filter { !$0.isBottom }, selection: $selectedItem) { item in
                     Label(item.rawValue, systemImage: item.icon)
                         .tag(item)
                 }
@@ -37,14 +37,15 @@ struct MainWindowView: View {
 
                 Spacer(minLength: 0)
 
-                SettingsLink {
+                Divider()
+
+                // Settings at the bottom of sidebar
+                List(selection: $selectedItem) {
                     Label("Settings", systemImage: "gearshape")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .tag(SidebarItem.settings)
                 }
-                .buttonStyle(.plain)
-                .padding(8)
+                .listStyle(.sidebar)
+                .frame(height: 40)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
         } detail: {
@@ -57,11 +58,13 @@ struct MainWindowView: View {
                 SnippetsView()
             case .style:
                 StyleView()
+            case .settings:
+                SettingsDetailView(appState: appState)
             case nil:
                 ContentUnavailableView(
                     "Select a Section",
                     systemImage: "sidebar.left",
-                    description: Text("Choose an item from the sidebar to continue.")
+                    description: Text("Choose an item from the sidebar.")
                 )
             }
         }

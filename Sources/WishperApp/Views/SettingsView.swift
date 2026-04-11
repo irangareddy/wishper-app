@@ -1,48 +1,44 @@
 import ServiceManagement
 import SwiftUI
 
-enum SettingsSection: String, CaseIterable, Identifiable {
-    case general = "General"
-    case models = "Models"
-    case about = "About"
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .general: return "gearshape"
-        case .models: return "cpu"
-        case .about: return "info.circle"
-        }
-    }
-}
-
-struct SettingsView: View {
+/// Settings as an inline detail view within the main window
+struct SettingsDetailView: View {
     @ObservedObject var appState: AppState
-    @State private var selectedSection: SettingsSection? = .general
+    @State private var selectedTab = 0
 
     var body: some View {
-        NavigationSplitView {
-            List(SettingsSection.allCases, selection: $selectedSection) { section in
-                Label(section.rawValue, systemImage: section.icon)
-                    .tag(section)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Text("Settings")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
             }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 150, ideal: 170, max: 200)
-        } detail: {
-            switch selectedSection {
-            case .general:
-                GeneralSettingsView(appState: appState)
-            case .models:
-                ModelSettingsView(appState: appState)
-            case .about:
-                AboutView()
-            case nil:
-                Text("Select a section")
-                    .foregroundStyle(.secondary)
+            .padding(24)
+
+            // Tab picker
+            Picker("", selection: $selectedTab) {
+                Text("General").tag(0)
+                Text("Models").tag(1)
+                Text("About").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 24)
+
+            Divider()
+                .padding(.top, 12)
+
+            // Content
+            ScrollView {
+                switch selectedTab {
+                case 0: GeneralSettingsView(appState: appState)
+                case 1: ModelSettingsView(appState: appState)
+                case 2: AboutView()
+                default: EmptyView()
+                }
             }
         }
-        .frame(minWidth: 600, minHeight: 400)
     }
 }
 
@@ -83,7 +79,6 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("General")
         .onAppear(perform: syncLaunchAtLoginState)
     }
 
@@ -166,32 +161,25 @@ struct ModelSettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(minWidth: 250)
                 }
-
-                Text("Smaller models are faster. 0.6B is recommended for most users.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
-            Section("Performance") {
-                LabeledContent("ASR + LLM total latency") {
+            Section("Performance Estimate") {
+                LabeledContent("ASR + LLM latency") {
                     Text(performanceEstimate)
                         .foregroundStyle(.secondary)
                 }
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Models")
     }
 
     private var performanceEstimate: String {
         let asr = appState.selectedASRModel
         let llm = appState.selectedLLMModel
-
         let asrTime = asr.contains("tiny") ? "~0.1s" : asr.contains("turbo") ? "~1.2s" : "~0.5s"
         let llmTime = llm.contains("0.6B") || llm.contains("0.3B") ? "~0.5s" :
                        llm.contains("1.7B") || llm.contains("1B") ? "~1.3s" : "~0.5s"
-
-        return "\(asrTime) + \(llmTime) (estimated)"
+        return "\(asrTime) + \(llmTime)"
     }
 }
 
@@ -232,6 +220,5 @@ struct AboutView: View {
                 .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("About")
     }
 }
