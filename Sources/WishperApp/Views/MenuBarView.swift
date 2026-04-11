@@ -1,14 +1,15 @@
 import SwiftUI
 
 struct MenuBarMenu: View {
-    @Environment(\.openWindow) private var openWindow
     @ObservedObject var appState: AppState
+    var onOpenWindow: () -> Void = {}
     @State private var recordingStartedAt: Date?
     @State private var currentTime = Date()
 
     var body: some View {
         Button("Open Wishper") {
-            openWindow(id: "main")
+            onOpenWindow()
+            NSApp.activate(ignoringOtherApps: true)
         }
 
         Section("Status") {

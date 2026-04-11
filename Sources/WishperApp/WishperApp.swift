@@ -2,20 +2,20 @@ import SwiftUI
 
 @main
 struct WishperApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState: AppState
     @State private var coordinator: PipelineCoordinator?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarMenu(appState: appState)
+            MenuBarMenu(appState: appState, onOpenWindow: { openWindow(id: "main") })
         } label: {
             if appState.isRecording {
                 Image(systemName: "waveform.circle.fill")
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(.white, .red)
             } else {
-                // TODO: Replace with custom transparent wishper icon
-                // Export just the waveform arcs + dot (no background) as PDF
                 Image(systemName: "waveform.and.mic")
             }
         }
@@ -44,5 +44,21 @@ struct WishperApp: App {
         Task { @MainActor in
             await coord.start()
         }
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // When Dock icon is clicked and no window is visible, show the main window
+        if !flag {
+            NSApp.activate(ignoringOtherApps: true)
+            for window in NSApp.windows {
+                if window.title == "Wishper" {
+                    window.makeKeyAndOrderFront(nil)
+                    return false
+                }
+            }
+        }
+        return true
     }
 }
