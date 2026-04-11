@@ -36,6 +36,26 @@ cp "$BINARY" "${OUTPUT_DIR}/${BUNDLE_NAME}/Contents/MacOS/${EXECUTABLE}"
 # Copy Info.plist
 cp "Sources/WishperApp/Info.plist" "${OUTPUT_DIR}/${BUNDLE_NAME}/Contents/Info.plist"
 
+# Copy app icon
+ICONSET="Sources/WishperApp/Resources/AppIcon.appiconset"
+if [ -d "$ICONSET" ]; then
+    # Use iconutil if possible, otherwise copy the largest icon
+    mkdir -p /tmp/wishper_icon.iconset
+    cp "$ICONSET"/icon_16.png /tmp/wishper_icon.iconset/icon_16x16.png
+    cp "$ICONSET"/icon_32.png /tmp/wishper_icon.iconset/icon_16x16@2x.png
+    cp "$ICONSET"/icon_32.png /tmp/wishper_icon.iconset/icon_32x32.png
+    cp "$ICONSET"/icon_64.png /tmp/wishper_icon.iconset/icon_32x32@2x.png
+    cp "$ICONSET"/icon_128.png /tmp/wishper_icon.iconset/icon_128x128.png
+    cp "$ICONSET"/icon_256.png /tmp/wishper_icon.iconset/icon_128x128@2x.png
+    cp "$ICONSET"/icon_256.png /tmp/wishper_icon.iconset/icon_256x256.png
+    cp "$ICONSET"/icon_512.png /tmp/wishper_icon.iconset/icon_256x256@2x.png
+    cp "$ICONSET"/icon_512.png /tmp/wishper_icon.iconset/icon_512x512.png
+    cp "$ICONSET"/icon_1024.png /tmp/wishper_icon.iconset/icon_512x512@2x.png
+    iconutil -c icns /tmp/wishper_icon.iconset -o "${OUTPUT_DIR}/${BUNDLE_NAME}/Contents/Resources/AppIcon.icns" 2>/dev/null
+    rm -rf /tmp/wishper_icon.iconset
+    echo "[wishper] Copied app icon"
+fi
+
 # Copy MLX metallib — MLX searches for "mlx.metallib" next to the binary first
 METALLIB="${BUILD_DIR}/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
 if [ -f "$METALLIB" ]; then
@@ -59,15 +79,15 @@ done
 # Sign metallib, nested bundles, binary, then app
 echo "[wishper] Signing..."
 find "${OUTPUT_DIR}/${BUNDLE_NAME}/Contents/MacOS" -name "*.metallib" -type f | while read -r ml; do
-    codesign --force --sign - "$ml" 2>/dev/null || true
+    codesign --force --sign "Apple Development: SAI RANGA REDDY NUKALA (X28473VPXB)" "$ml" 2>/dev/null || true
 done
 find "${OUTPUT_DIR}/${BUNDLE_NAME}/Contents/MacOS" -name "*.bundle" -type d | while read -r nested; do
-    codesign --force --sign - "$nested" 2>/dev/null || true
+    codesign --force --sign "Apple Development: SAI RANGA REDDY NUKALA (X28473VPXB)" "$nested" 2>/dev/null || true
 done
-codesign --force --sign - \
+codesign --force --sign "Apple Development: SAI RANGA REDDY NUKALA (X28473VPXB)" \
     --entitlements "Sources/WishperApp/Entitlements.plist" \
     "${OUTPUT_DIR}/${BUNDLE_NAME}/Contents/MacOS/${EXECUTABLE}"
-codesign --force --sign - \
+codesign --force --sign "Apple Development: SAI RANGA REDDY NUKALA (X28473VPXB)" \
     --entitlements "Sources/WishperApp/Entitlements.plist" \
     "${OUTPUT_DIR}/${BUNDLE_NAME}"
 

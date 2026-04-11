@@ -20,7 +20,10 @@ let package = Package(
                 .product(name: "Qwen3ASR", package: "speech-swift"),
                 .product(name: "SpeechVAD", package: "speech-swift"),
             ],
-            path: "Sources/WishperApp"
+            path: "Sources/WishperApp",
+            resources: [
+                .process("Resources"),
+            ]
         ),
     ]
 )
