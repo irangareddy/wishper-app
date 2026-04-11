@@ -1,11 +1,16 @@
 import SwiftUI
 
 struct MenuBarMenu: View {
+    @Environment(\.openWindow) private var openWindow
     @ObservedObject var appState: AppState
     @State private var recordingStartedAt: Date?
     @State private var currentTime = Date()
 
     var body: some View {
+        Button("Open Wishper") {
+            openWindow(id: "main")
+        }
+
         Section("Status") {
             statusRow(title: appState.statusMessage, systemImage: statusIcon)
             statusRow(title: "ASR: \(shortModelName(appState.selectedASRModel))", systemImage: "waveform")

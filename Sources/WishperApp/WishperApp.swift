@@ -20,6 +20,13 @@ struct WishperApp: App {
             }
         }
 
+        Window("Wishper", id: "main") {
+            MainWindowView(appState: appState)
+        }
+        .defaultSize(width: 800, height: 600)
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
+
         Settings {
             SettingsView(appState: appState)
                 .navigationTitle("Settings")
