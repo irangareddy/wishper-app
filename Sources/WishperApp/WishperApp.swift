@@ -10,11 +10,13 @@ struct WishperApp: App {
             MenuBarMenu(appState: appState)
         } label: {
             if appState.isRecording {
-                Image(systemName: "record.circle.fill")
-                    .foregroundStyle(.red)
+                Image(systemName: "waveform.circle.fill")
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .red)
             } else {
-                Image("menubar_icon_1x")
-                    .renderingMode(.template)
+                // TODO: Replace with custom transparent wishper icon
+                // Export just the waveform arcs + dot (no background) as PDF
+                Image(systemName: "waveform.and.mic")
             }
         }
 
