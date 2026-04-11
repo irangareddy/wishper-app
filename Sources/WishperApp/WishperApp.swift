@@ -9,7 +9,13 @@ struct WishperApp: App {
         MenuBarExtra {
             MenuBarMenu(appState: appState)
         } label: {
-            Image(systemName: appState.isRecording ? "waveform.circle.fill" : "waveform.circle")
+            if appState.isRecording {
+                Image(systemName: "record.circle.fill")
+                    .foregroundStyle(.red)
+            } else {
+                Image("menubar_icon_1x")
+                    .renderingMode(.template)
+            }
         }
 
         Settings {
