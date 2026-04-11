@@ -1,9 +1,11 @@
 import AppKit
 import AVFoundation
 import Foundation
+import OSLog
 
 @MainActor
 final class AudioRecorder {
+    private let logger = WishperLog.voicePipeline
     private var engine = AVAudioEngine()
     private var audioBuffer: [Float] = []
     private var smoothedLevel: Float = 0
@@ -13,27 +15,28 @@ final class AudioRecorder {
 
     /// Check and request microphone permission once at startup
     static func checkMicPermission() async -> Bool {
+        let logger = WishperLog.voicePipeline
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        print("[wishper] Microphone authorization status: \(status.rawValue)")
+        logger.debug("microphone authorization status=\(status.rawValue)")
 
         switch status {
         case .authorized:
-            print("[wishper] Microphone permission: already granted")
+            logger.debug("microphone permission already granted")
             return true
         case .notDetermined:
-            print("[wishper] Microphone permission: requesting...")
+            logger.info("microphone permission requesting")
             let granted = await AVCaptureDevice.requestAccess(for: .audio)
-            print("[wishper] Microphone permission: \(granted ? "granted" : "denied")")
+            logger.info("microphone permission \(granted ? "granted" : "denied", privacy: .public)")
             return granted
         case .denied, .restricted:
             // Try requesting anyway — sometimes status is wrong for new bundle IDs
-            print("[wishper] Microphone permission: status=denied, attempting request anyway...")
+            logger.info("microphone permission denied attempting retry")
             let granted = await AVCaptureDevice.requestAccess(for: .audio)
             if granted {
-                print("[wishper] Microphone permission: granted after retry")
+                logger.info("microphone permission granted after retry")
                 return true
             }
-            print("[wishper] Microphone permission: denied. Opening System Settings...")
+            logger.info("microphone permission denied opening system settings")
             // Open the settings pane so user can grant manually
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
                 NSWorkspace.shared.open(url)
@@ -52,7 +55,7 @@ final class AudioRecorder {
         let inputNode = engine.inputNode
         // Use the hardware's native format — don't force 16kHz
         let hardwareFormat = inputNode.outputFormat(forBus: 0)
-        print("[wishper] Mic hardware format: \(hardwareFormat)")
+        logger.debug("mic hardware format sampleRate=\(hardwareFormat.sampleRate, format: .fixed(precision: 0)) channels=\(hardwareFormat.channelCount)")
 
         let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
@@ -90,7 +93,7 @@ final class AudioRecorder {
             }
 
             if let error {
-                print("[wishper] Audio conversion error: \(error)")
+                self.logger.error("audio conversion error: \(error.localizedDescription, privacy: .public)")
                 return
             }
 
@@ -112,7 +115,7 @@ final class AudioRecorder {
         engine.prepare()
         try engine.start()
         isRecording = true
-        print("[wishper] Recording started (\(hardwareFormat.sampleRate)Hz -> \(sampleRate)Hz)")
+        logger.info("recorder started sampleRate=\(hardwareFormat.sampleRate, format: .fixed(precision: 0)) target=\(self.sampleRate, format: .fixed(precision: 0))")
     }
 
     func stop() {
@@ -123,7 +126,7 @@ final class AudioRecorder {
         lock.lock()
         smoothedLevel = 0
         lock.unlock()
-        print("[wishper] Recording stopped, \(audioBuffer.count) samples captured")
+        logger.info("recorder stopped samples=\(self.audioBuffer.count)")
     }
 
     func getAudio() -> [Float] {

@@ -1,6 +1,6 @@
 //
 //  Wishper_AppTests.swift
-//  Wishper AppTests
+//  WishperAppTests
 //
 //  Created by Ranga Reddy Nukala on 4/11/26.
 //

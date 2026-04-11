@@ -1,8 +1,10 @@
 import AppKit
+import OSLog
 import SwiftUI
 
 @main
 struct WishperApp: App {
+    private let logger = WishperLog.voicePipeline
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState: AppState
     @State private var coordinator: PipelineCoordinator?
@@ -39,7 +41,7 @@ struct WishperApp: App {
         _appState = StateObject(wrappedValue: state)
         let coord = PipelineCoordinator(appState: state)
         _coordinator = State(initialValue: coord)
-        print("[wishper] WishperApp init: scheduling start()")
+        logger.debug("app init scheduling pipeline start")
         Task { @MainActor in
             await coord.start()
         }

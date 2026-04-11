@@ -82,6 +82,8 @@ final class PipelineCoordinator {
     func stop() {
         hotkeyManager.stop()
         recorder.stop()
+        appState.isRecording = false
+        appState.recordingStartedAt = nil
         cancelOverlayMetering()
         cancelOverlayHide()
         overlay.hide()
@@ -96,6 +98,7 @@ final class PipelineCoordinator {
         do {
             try recorder.start()
             appState.isRecording = true
+            appState.recordingStartedAt = Date()
             appState.statusMessage = "Recording..."
             overlay.show(state: .recording, level: recorder.currentNormalizedLevel())
             startOverlayMetering()
@@ -117,6 +120,7 @@ final class PipelineCoordinator {
         recorder.stop()
         cancelOverlayMetering()
         appState.isRecording = false
+        appState.recordingStartedAt = nil
         logger.info("recording stopped")
         if appState.soundsEnabled { sounds.stopRecording() }
 
@@ -202,6 +206,7 @@ final class PipelineCoordinator {
         cancelOverlayHide()
         isProcessing = false
         appState.isRecording = false
+        appState.recordingStartedAt = nil
         appState.isTranscribing = false
         appState.isCleaning = false
         appState.statusMessage = "Cancelled"

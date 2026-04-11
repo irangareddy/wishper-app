@@ -20,37 +20,37 @@
 			containerPortal = 1D0448772F8AC1C600801B60 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 1D04487E2F8AC1C600801B60;
-			remoteInfo = "Wishper App";
+			remoteInfo = "WishperApp";
 		};
 		1D0448972F8AC1C800801B60 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1D0448772F8AC1C600801B60 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 1D04487E2F8AC1C600801B60;
-			remoteInfo = "Wishper App";
+			remoteInfo = "WishperApp";
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		1D04487F2F8AC1C600801B60 /* Wishper App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Wishper App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		1D04488C2F8AC1C800801B60 /* Wishper AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Wishper AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		1D0448962F8AC1C800801B60 /* Wishper AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Wishper AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D04487F2F8AC1C600801B60 /* WishperApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "WishperApp.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D04488C2F8AC1C800801B60 /* WishperAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "WishperAppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D0448962F8AC1C800801B60 /* WishperAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "WishperAppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		1D0448812F8AC1C600801B60 /* Wishper App */ = {
+		1D0448812F8AC1C600801B60 /* WishperApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Wishper App";
+			path = "WishperApp";
 			sourceTree = "<group>";
 		};
-		1D04488F2F8AC1C800801B60 /* Wishper AppTests */ = {
+		1D04488F2F8AC1C800801B60 /* WishperAppTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Wishper AppTests";
+			path = "WishperAppTests";
 			sourceTree = "<group>";
 		};
-		1D0448992F8AC1C800801B60 /* Wishper AppUITests */ = {
+		1D0448992F8AC1C800801B60 /* WishperAppUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Wishper AppUITests";
+			path = "WishperAppUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -88,9 +88,9 @@
 		1D0448762F8AC1C600801B60 = {
 			isa = PBXGroup;
 			children = (
-				1D0448812F8AC1C600801B60 /* Wishper App */,
-				1D04488F2F8AC1C800801B60 /* Wishper AppTests */,
-				1D0448992F8AC1C800801B60 /* Wishper AppUITests */,
+				1D0448812F8AC1C600801B60 /* WishperApp */,
+				1D04488F2F8AC1C800801B60 /* WishperAppTests */,
+				1D0448992F8AC1C800801B60 /* WishperAppUITests */,
 				1D0448802F8AC1C600801B60 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -98,9 +98,9 @@
 		1D0448802F8AC1C600801B60 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1D04487F2F8AC1C600801B60 /* Wishper App.app */,
-				1D04488C2F8AC1C800801B60 /* Wishper AppTests.xctest */,
-				1D0448962F8AC1C800801B60 /* Wishper AppUITests.xctest */,
+				1D04487F2F8AC1C600801B60 /* WishperApp.app */,
+				1D04488C2F8AC1C800801B60 /* WishperAppTests.xctest */,
+				1D0448962F8AC1C800801B60 /* WishperAppUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -108,9 +108,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		1D04487E2F8AC1C600801B60 /* Wishper App */ = {
+		1D04487E2F8AC1C600801B60 /* WishperApp */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1D0448A02F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "Wishper App" */;
+			buildConfigurationList = 1D0448A02F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "WishperApp" */;
 			buildPhases = (
 				1D04487B2F8AC1C600801B60 /* Sources */,
 				1D04487C2F8AC1C600801B60 /* Frameworks */,
@@ -121,9 +121,9 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				1D0448812F8AC1C600801B60 /* Wishper App */,
+				1D0448812F8AC1C600801B60 /* WishperApp */,
 			);
-			name = "Wishper App";
+			name = "WishperApp";
 			packageProductDependencies = (
 				1D29B8E22F8AC67E000EE34A /* MLXLLM */,
 				1D29B8E42F8AC67E000EE34A /* MLXLMCommon */,
@@ -131,13 +131,13 @@
 				1D29B8E92F8AC77D000EE34A /* SpeechVAD */,
 				1D29B8EC2F8ACA97000EE34A /* MLXFast */,
 			);
-			productName = "Wishper App";
-			productReference = 1D04487F2F8AC1C600801B60 /* Wishper App.app */;
+			productName = "WishperApp";
+			productReference = 1D04487F2F8AC1C600801B60 /* WishperApp.app */;
 			productType = "com.apple.product-type.application";
 		};
-		1D04488B2F8AC1C800801B60 /* Wishper AppTests */ = {
+		1D04488B2F8AC1C800801B60 /* WishperAppTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1D0448A32F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "Wishper AppTests" */;
+			buildConfigurationList = 1D0448A32F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "WishperAppTests" */;
 			buildPhases = (
 				1D0448882F8AC1C800801B60 /* Sources */,
 				1D0448892F8AC1C800801B60 /* Frameworks */,
@@ -149,18 +149,18 @@
 				1D04488E2F8AC1C800801B60 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				1D04488F2F8AC1C800801B60 /* Wishper AppTests */,
+				1D04488F2F8AC1C800801B60 /* WishperAppTests */,
 			);
-			name = "Wishper AppTests";
+			name = "WishperAppTests";
 			packageProductDependencies = (
 			);
-			productName = "Wishper AppTests";
-			productReference = 1D04488C2F8AC1C800801B60 /* Wishper AppTests.xctest */;
+			productName = "WishperAppTests";
+			productReference = 1D04488C2F8AC1C800801B60 /* WishperAppTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		1D0448952F8AC1C800801B60 /* Wishper AppUITests */ = {
+		1D0448952F8AC1C800801B60 /* WishperAppUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1D0448A62F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "Wishper AppUITests" */;
+			buildConfigurationList = 1D0448A62F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "WishperAppUITests" */;
 			buildPhases = (
 				1D0448922F8AC1C800801B60 /* Sources */,
 				1D0448932F8AC1C800801B60 /* Frameworks */,
@@ -172,13 +172,13 @@
 				1D0448982F8AC1C800801B60 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				1D0448992F8AC1C800801B60 /* Wishper AppUITests */,
+				1D0448992F8AC1C800801B60 /* WishperAppUITests */,
 			);
-			name = "Wishper AppUITests";
+			name = "WishperAppUITests";
 			packageProductDependencies = (
 			);
-			productName = "Wishper AppUITests";
-			productReference = 1D0448962F8AC1C800801B60 /* Wishper AppUITests.xctest */;
+			productName = "WishperAppUITests";
+			productReference = 1D0448962F8AC1C800801B60 /* WishperAppUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -204,7 +204,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 1D04487A2F8AC1C600801B60 /* Build configuration list for PBXProject "Wishper App" */;
+			buildConfigurationList = 1D04487A2F8AC1C600801B60 /* Build configuration list for PBXProject "WishperApp" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -223,9 +223,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				1D04487E2F8AC1C600801B60 /* Wishper App */,
-				1D04488B2F8AC1C800801B60 /* Wishper AppTests */,
-				1D0448952F8AC1C800801B60 /* Wishper AppUITests */,
+				1D04487E2F8AC1C600801B60 /* WishperApp */,
+				1D04488B2F8AC1C800801B60 /* WishperAppTests */,
+				1D0448952F8AC1C800801B60 /* WishperAppUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -281,12 +281,12 @@
 /* Begin PBXTargetDependency section */
 		1D04488E2F8AC1C800801B60 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 1D04487E2F8AC1C600801B60 /* Wishper App */;
+			target = 1D04487E2F8AC1C600801B60 /* WishperApp */;
 			targetProxy = 1D04488D2F8AC1C800801B60 /* PBXContainerItemProxy */;
 		};
 		1D0448982F8AC1C800801B60 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 1D04487E2F8AC1C600801B60 /* Wishper App */;
+			target = 1D04487E2F8AC1C600801B60 /* WishperApp */;
 			targetProxy = 1D0448972F8AC1C800801B60 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -533,7 +533,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wishper App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wishper App";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WishperApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/WishperApp";
 			};
 			name = Debug;
 		};
@@ -554,7 +554,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wishper App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wishper App";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WishperApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/WishperApp";
 			};
 			name = Release;
 		};
@@ -573,7 +573,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "Wishper App";
+				TEST_TARGET_NAME = "WishperApp";
 			};
 			name = Debug;
 		};
@@ -592,14 +592,14 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "Wishper App";
+				TEST_TARGET_NAME = "WishperApp";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1D04487A2F8AC1C600801B60 /* Build configuration list for PBXProject "Wishper App" */ = {
+		1D04487A2F8AC1C600801B60 /* Build configuration list for PBXProject "WishperApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1D04489E2F8AC1C800801B60 /* Debug */,
@@ -608,7 +608,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1D0448A02F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "Wishper App" */ = {
+		1D0448A02F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "WishperApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1D0448A12F8AC1C800801B60 /* Debug */,
@@ -617,7 +617,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1D0448A32F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "Wishper AppTests" */ = {
+		1D0448A32F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "WishperAppTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1D0448A42F8AC1C800801B60 /* Debug */,
@@ -626,7 +626,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1D0448A62F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "Wishper AppUITests" */ = {
+		1D0448A62F8AC1C800801B60 /* Build configuration list for PBXNativeTarget "WishperAppUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1D0448A72F8AC1C800801B60 /* Debug */,

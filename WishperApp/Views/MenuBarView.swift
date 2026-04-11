@@ -5,7 +5,6 @@ import SwiftUI
 struct MenuBarMenu: View {
     @ObservedObject var appState: AppState
     var onOpenWindow: () -> Void = {}
-    @State private var recordingStartedAt: Date?
     @State private var currentTime = Date()
 
     var body: some View {
@@ -85,14 +84,6 @@ struct MenuBarMenu: View {
             }
             .keyboardShortcut("q", modifiers: .command)
         }
-        .onAppear {
-            if appState.isRecording, recordingStartedAt == nil {
-                recordingStartedAt = Date()
-            }
-        }
-        .onChange(of: appState.isRecording) { _, isRecording in
-            recordingStartedAt = isRecording ? Date() : nil
-        }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { newTime in
             currentTime = newTime
         }
@@ -106,7 +97,7 @@ struct MenuBarMenu: View {
     }
 
     private var recordingDurationText: String {
-        guard let recordingStartedAt else { return "0:00" }
+        guard let recordingStartedAt = appState.recordingStartedAt else { return "0:00" }
         let duration = Int(currentTime.timeIntervalSince(recordingStartedAt))
         let minutes = duration / 60
         let seconds = duration % 60

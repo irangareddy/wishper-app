@@ -2,9 +2,11 @@
 import AppKit
 import Carbon
 import Foundation
+import OSLog
 
 @MainActor
 final class TextInjector {
+    private let logger = WishperLog.voicePipeline
 
     private static let textElementRoles: Set<String> = [
         kAXTextFieldRole as String,
@@ -20,20 +22,20 @@ final class TextInjector {
 
         // Strategy 1: Accessibility API — direct insert at cursor
         if insertViaAccessibility(text) {
-            print("[wishper] Injected via Accessibility API")
+            logger.info("injection path=accessibility")
             return true
         }
 
         // Strategy 2: postToPid — delivers Cmd+V directly to target process, bypasses focus
         if let pid = targetPID {
             simulatePasteToPID(pid)
-            print("[wishper] Injected via CGEvent postToPid(\(pid))")
+            logger.info("injection path=postToPid pid=\(pid)")
             return true
         }
 
         // Strategy 3: Post to session (fallback if no PID)
         simulatePaste()
-        print("[wishper] Injected via CGEvent Cmd+V (session)")
+        logger.info("injection path=sessionPaste")
         return true
     }
 
