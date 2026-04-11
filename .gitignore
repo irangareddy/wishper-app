@@ -1,0 +1,10 @@
+DerivedData/
+.build/
+.xcodebuild/
+*.xcuserdata/
+xcuserdata/
+.DS_Store
+*.ipa
+dist/
+.agents/
+plugins/
