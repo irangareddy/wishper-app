@@ -100,7 +100,11 @@ final class PipelineCoordinator {
             appState.isRecording = true
             appState.recordingStartedAt = Date()
             appState.statusMessage = "Recording..."
-            overlay.show(state: .recording, level: recorder.currentNormalizedLevel())
+            overlay.show(
+                state: .recording,
+                level: recorder.currentNormalizedLevel(),
+                levels: recorder.currentWaveformLevels()
+            )
             startOverlayMetering()
             logger.info("recording started targetApp=\(self.targetAppName, privacy: .public)")
             if appState.soundsEnabled { sounds.startRecording() }
@@ -249,8 +253,8 @@ final class PipelineCoordinator {
         cancelOverlayMetering()
         overlayLevelTask = Task { @MainActor [weak self] in
             while let self, self.recorder.isRecording {
-                self.overlay.updateRecordingLevel(self.recorder.currentNormalizedLevel())
-                try? await Task.sleep(for: .milliseconds(120))
+                self.overlay.updateRecordingLevels(self.recorder.currentWaveformLevels())
+                try? await Task.sleep(for: .milliseconds(48))
             }
             self?.overlayLevelTask = nil
         }

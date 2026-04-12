@@ -20,6 +20,7 @@ struct RecordingOverlayPrompt: Equatable {
 final class RecordingOverlayModel: ObservableObject {
     @Published var state: RecordingOverlayState = .recording
     @Published var level: CGFloat = 0
+    @Published var levels: [CGFloat] = Array(repeating: 0.08, count: 11)
     @Published var prompt: RecordingOverlayPrompt?
 }
 
@@ -53,11 +54,13 @@ final class RecordingOverlayController {
     func show(
         state: RecordingOverlayState,
         level: CGFloat = 0,
+        levels: [CGFloat]? = nil,
         prompt: RecordingOverlayPrompt? = nil
     ) {
         withAnimation(.snappy(duration: 0.18, extraBounce: 0.02)) {
             model.state = state
             model.level = level
+            model.levels = normalizedLevels(from: levels, fallbackLevel: level)
             model.prompt = prompt
         }
 
@@ -73,6 +76,18 @@ final class RecordingOverlayController {
 
         withAnimation(.interactiveSpring(response: 0.14, dampingFraction: 0.82, blendDuration: 0.08)) {
             model.level = clampedLevel
+        }
+    }
+
+    func updateRecordingLevels(_ levels: [CGFloat]) {
+        guard model.state == .recording, panel.isVisible else { return }
+
+        let normalized = normalizedLevels(from: levels, fallbackLevel: model.level)
+        guard normalized != model.levels else { return }
+
+        withAnimation(.interactiveSpring(response: 0.12, dampingFraction: 0.84, blendDuration: 0.06)) {
+            model.levels = normalized
+            model.level = normalized.max() ?? model.level
         }
     }
 
@@ -107,6 +122,18 @@ final class RecordingOverlayController {
         let y = visibleFrame.maxY - height - 68
         return NSRect(x: x, y: y, width: width, height: height)
     }
+
+    private func normalizedLevels(from levels: [CGFloat]?, fallbackLevel: CGFloat) -> [CGFloat] {
+        let defaultLevels = Array(repeating: max(0.08, min(fallbackLevel, 1)), count: 11)
+        guard let levels, !levels.isEmpty else { return defaultLevels }
+
+        if levels.count >= 11 {
+            return Array(levels.suffix(11)).map { max(0.08, min($0, 1)) }
+        }
+
+        let paddedLevels = Array(repeating: max(0.08, min(fallbackLevel, 1)), count: 11 - levels.count) + levels
+        return paddedLevels.map { max(0.08, min($0, 1)) }
+    }
 }
 
 private struct OverlayContent: View {
@@ -135,7 +162,7 @@ private struct OverlayContent: View {
         case .readyPrompt:
             IdleDots()
         case .recording:
-            RecordingLevelBars(level: model.level)
+            RecordingLevelBars(levels: model.levels)
         case .transcribing, .cleaning:
             SlowActivityBars(baseHeights: [4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4])
         case .done:
@@ -226,24 +253,35 @@ private struct IdleDots: View {
 }
 
 private struct RecordingLevelBars: View {
-    let level: CGFloat
+    let levels: [CGFloat]
 
     var body: some View {
-        let profiles: [CGFloat] = [0.26, 0.38, 0.52, 0.70, 0.88, 1.0, 0.88, 0.70, 0.52, 0.38, 0.26]
-        let clampedLevel = max(0.08, min(level, 1))
+        let emphasis: [CGFloat] = [0.58, 0.68, 0.80, 0.92, 1.02, 1.08, 1.02, 0.92, 0.80, 0.68, 0.58]
+        let resolvedLevels = normalizedLevels
 
         HStack(alignment: .center, spacing: 2) {
-            ForEach(Array(profiles.enumerated()), id: \.offset) { _, profile in
-                let baseHeight = 2.8 + (profile * 6.4)
-                let speechLift = profile * (0.6 + (clampedLevel * 1.8))
-                let height = baseHeight + speechLift
+            ForEach(Array(resolvedLevels.enumerated()), id: \.offset) { index, level in
+                let profile = emphasis[index]
+                let baseHeight = 2.6 + (profile * 1.5)
+                let dynamicHeight = (level * 8.2) + (profile * 2.4)
+                let height = baseHeight + dynamicHeight
+
                 Capsule(style: .continuous)
                     .fill(Color.white.opacity(0.98))
                     .frame(width: 2.2, height: height)
             }
         }
         .frame(height: 13)
-        .animation(.interactiveSpring(response: 0.14, dampingFraction: 0.82, blendDuration: 0.08), value: clampedLevel)
+        .animation(.interactiveSpring(response: 0.12, dampingFraction: 0.84, blendDuration: 0.06), value: resolvedLevels)
+    }
+
+    private var normalizedLevels: [CGFloat] {
+        if levels.count >= 11 {
+            return Array(levels.suffix(11)).map { max(0.08, min($0, 1)) }
+        }
+
+        let padding = Array(repeating: CGFloat(0.08), count: 11 - levels.count)
+        return (padding + levels).map { max(0.08, min($0, 1)) }
     }
 }
 

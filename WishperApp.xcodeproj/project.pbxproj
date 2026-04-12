@@ -20,37 +20,37 @@
 			containerPortal = 1D0448772F8AC1C600801B60 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 1D04487E2F8AC1C600801B60;
-			remoteInfo = "WishperApp";
+			remoteInfo = WishperApp;
 		};
 		1D0448972F8AC1C800801B60 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1D0448772F8AC1C600801B60 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 1D04487E2F8AC1C600801B60;
-			remoteInfo = "WishperApp";
+			remoteInfo = WishperApp;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		1D04487F2F8AC1C600801B60 /* WishperApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "WishperApp.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		1D04488C2F8AC1C800801B60 /* WishperAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "WishperAppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		1D0448962F8AC1C800801B60 /* WishperAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "WishperAppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D04487F2F8AC1C600801B60 /* WishperApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WishperApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D04488C2F8AC1C800801B60 /* WishperAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WishperAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D0448962F8AC1C800801B60 /* WishperAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WishperAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1D0448812F8AC1C600801B60 /* WishperApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "WishperApp";
+			path = WishperApp;
 			sourceTree = "<group>";
 		};
 		1D04488F2F8AC1C800801B60 /* WishperAppTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "WishperAppTests";
+			path = WishperAppTests;
 			sourceTree = "<group>";
 		};
 		1D0448992F8AC1C800801B60 /* WishperAppUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "WishperAppUITests";
+			path = WishperAppUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -123,7 +123,7 @@
 			fileSystemSynchronizedGroups = (
 				1D0448812F8AC1C600801B60 /* WishperApp */,
 			);
-			name = "WishperApp";
+			name = WishperApp;
 			packageProductDependencies = (
 				1D29B8E22F8AC67E000EE34A /* MLXLLM */,
 				1D29B8E42F8AC67E000EE34A /* MLXLMCommon */,
@@ -131,7 +131,7 @@
 				1D29B8E92F8AC77D000EE34A /* SpeechVAD */,
 				1D29B8EC2F8ACA97000EE34A /* MLXFast */,
 			);
-			productName = "WishperApp";
+			productName = WishperApp;
 			productReference = 1D04487F2F8AC1C600801B60 /* WishperApp.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -151,10 +151,10 @@
 			fileSystemSynchronizedGroups = (
 				1D04488F2F8AC1C800801B60 /* WishperAppTests */,
 			);
-			name = "WishperAppTests";
+			name = WishperAppTests;
 			packageProductDependencies = (
 			);
-			productName = "WishperAppTests";
+			productName = WishperAppTests;
 			productReference = 1D04488C2F8AC1C800801B60 /* WishperAppTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
@@ -174,10 +174,10 @@
 			fileSystemSynchronizedGroups = (
 				1D0448992F8AC1C800801B60 /* WishperAppUITests */,
 			);
-			name = "WishperAppUITests";
+			name = WishperAppUITests;
 			packageProductDependencies = (
 			);
-			productName = "WishperAppUITests";
+			productName = WishperAppUITests;
 			productReference = 1D0448962F8AC1C800801B60 /* WishperAppUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
@@ -417,28 +417,25 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = WishperApp/Wishper_App.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XU9WC44F8F;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
 				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Wishper needs microphone access to transcribe your speech.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -450,7 +447,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
-				RUNTIME_EXCEPTION_ALLOW_JIT = YES;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
 				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
@@ -469,28 +466,25 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = WishperApp/Wishper_App.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XU9WC44F8F;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
 				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Wishper needs microphone access to transcribe your speech.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -502,7 +496,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
-				RUNTIME_EXCEPTION_ALLOW_JIT = YES;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
 				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
@@ -573,7 +567,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "WishperApp";
+				TEST_TARGET_NAME = WishperApp;
 			};
 			name = Debug;
 		};
@@ -592,7 +586,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "WishperApp";
+				TEST_TARGET_NAME = WishperApp;
 			};
 			name = Release;
 		};

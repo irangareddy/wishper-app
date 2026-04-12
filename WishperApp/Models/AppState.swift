@@ -10,7 +10,7 @@ final class AppState: ObservableObject {
     @Published var lastCleanedText = ""
     @Published var selectedASRModel = "aufklarer/Qwen3-ASR-0.6B-MLX-4bit"
     @Published var selectedLLMModel = "mlx-community/Qwen3-0.6B-4bit"
-    @Published var cleanupEnabled = true
+    @Published var cleanupEnabled = false
     @Published var hotkeyMode = "push_to_talk"
     @Published var hotkeyConfig = HotkeyConfiguration.rightCommand
     @Published var soundsEnabled = true

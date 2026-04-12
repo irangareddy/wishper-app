@@ -19,8 +19,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .settings: "gearshape"
         }
     }
-
-    var isBottom: Bool { self == .settings }
 }
 
 struct MainWindowView: View {
@@ -29,45 +27,43 @@ struct MainWindowView: View {
 
     var body: some View {
         NavigationSplitView {
-            VStack(spacing: 0) {
-                List(SidebarItem.allCases.filter { !$0.isBottom }, selection: $selectedItem) { item in
-                    Label(item.rawValue, systemImage: item.icon)
-                        .tag(item)
+            List(selection: $selectedItem) {
+                Section {
+                    ForEach(SidebarItem.allCases.filter { $0 != .settings }) { item in
+                        Label(item.rawValue, systemImage: item.icon)
+                            .tag(item)
+                    }
                 }
-                .listStyle(.sidebar)
 
-                Spacer(minLength: 0)
-
-                Divider()
-
-                // Settings at the bottom of sidebar
-                List(selection: $selectedItem) {
+                Section {
                     Label("Settings", systemImage: "gearshape")
                         .tag(SidebarItem.settings)
                 }
-                .listStyle(.sidebar)
-                .frame(height: 40)
             }
+            .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
         } detail: {
-            switch selectedItem {
-            case .home:
-                HomeView(appState: appState)
-            case .dictionary:
-                DictionaryView()
-            case .snippets:
-                SnippetsView()
-            case .style:
-                StyleView()
-            case .settings:
-                SettingsDetailView(appState: appState)
-            case nil:
-                ContentUnavailableView(
-                    "Select a Section",
-                    systemImage: "sidebar.left",
-                    description: Text("Choose an item from the sidebar.")
-                )
+            Group {
+                switch selectedItem {
+                case .home:
+                    HomeView(appState: appState)
+                case .dictionary:
+                    DictionaryView()
+                case .snippets:
+                    SnippetsView()
+                case .style:
+                    StyleView()
+                case .settings:
+                    SettingsDetailView(appState: appState)
+                case nil:
+                    ContentUnavailableView(
+                        "Select a Section",
+                        systemImage: "sidebar.left",
+                        description: Text("Choose an item from the sidebar.")
+                    )
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 700, minHeight: 500)
     }
