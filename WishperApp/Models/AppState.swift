@@ -17,6 +17,7 @@ final class AppState: ObservableObject {
     @Published var statusMessage = "Ready"
     @Published var recordingStartedAt: Date?
     let stats = StatsTracker()
+    var memoryMonitor: MemoryMonitor?
 
     // Transcript history
     @Published var history: [(date: Date, raw: String, cleaned: String)] = []

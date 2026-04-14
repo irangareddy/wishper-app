@@ -22,7 +22,8 @@ struct SettingsDetailView: View {
             Picker("", selection: $selectedTab) {
                 Text("General").tag(0)
                 Text("Models").tag(1)
-                Text("About").tag(2)
+                Text("Memory").tag(2)
+                Text("About").tag(3)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 24)
@@ -35,7 +36,11 @@ struct SettingsDetailView: View {
                 switch selectedTab {
                 case 0: GeneralSettingsView(appState: appState)
                 case 1: ModelSettingsView(appState: appState)
-                case 2: AboutView()
+                case 2:
+                    if let monitor = appState.memoryMonitor {
+                        MemoryDiagnosticsView(memoryMonitor: monitor)
+                    }
+                case 3: AboutView()
                 default: EmptyView()
                 }
             }

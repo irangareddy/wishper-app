@@ -1,18 +1,27 @@
 import Foundation
+import MLX
 import Qwen3ASR
 
 actor Transcriber {
     private var model: Qwen3ASRModel?
     private let modelId: String
 
+    var isModelLoaded: Bool { model != nil }
+
     init(model: String = "aufklarer/Qwen3-ASR-0.6B-MLX-4bit") {
         self.modelId = model
     }
 
     func loadModel() async throws {
+        guard model == nil else { return }
         model = try await Qwen3ASRModel.fromPretrained(modelId: modelId) { progress, status in
             print("[wishper] ASR model: [\(Int(progress * 100))%] \(status)")
         }
+    }
+
+    func unloadModel() {
+        model = nil
+        Memory.clearCache()
     }
 
     func transcribe(audioArray: [Float]) async throws -> String {

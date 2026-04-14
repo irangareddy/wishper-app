@@ -1,4 +1,5 @@
 import Foundation
+import MLX
 import MLXLLM
 import MLXLMCommon
 
@@ -8,6 +9,8 @@ actor Cleaner {
     private let maxTokens: Int
     var enabled: Bool
 
+    var isModelLoaded: Bool { model != nil }
+
     init(model: String = "mlx-community/Qwen3-0.6B-4bit", maxTokens: Int = 256, enabled: Bool = true) {
         self.modelName = model
         self.maxTokens = maxTokens
@@ -15,6 +18,7 @@ actor Cleaner {
     }
 
     func loadModel() async throws {
+        guard model == nil else { return }
         guard enabled else { return }
         print("[wishper] LLM: Loading \(modelName)...")
         let configuration = ModelConfiguration(id: modelName)
@@ -23,6 +27,11 @@ actor Cleaner {
             print("[wishper] LLM: \(pct)%")
         }
         print("[wishper] LLM: Model loaded")
+    }
+
+    func unloadModel() {
+        model = nil
+        Memory.clearCache()
     }
 
     func clean(rawText: String, appContext: String = "") async throws -> String {

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import MLX
 import OSLog
 
 /// Orchestrates the full voice-to-text pipeline:
@@ -7,6 +8,7 @@ import OSLog
 @MainActor
 final class PipelineCoordinator {
     let appState: AppState
+    let memoryMonitor: MemoryMonitor
     private let recorder = AudioRecorder()
     private let transcriber: Transcriber
     private let cleaner: Cleaner
@@ -21,14 +23,18 @@ final class PipelineCoordinator {
     private var overlayLevelTask: Task<Void, Never>?
     private let logger = WishperLog.voicePipeline
 
-    init(appState: AppState) {
+    init(appState: AppState, memoryMonitor: MemoryMonitor) {
         self.appState = appState
+        self.memoryMonitor = memoryMonitor
         self.transcriber = Transcriber(model: appState.selectedASRModel)
         self.cleaner = Cleaner(model: appState.selectedLLMModel, enabled: appState.cleanupEnabled)
     }
 
     func start() async {
         logger.info("voice pipeline startup")
+
+        // Cap MLX buffer cache to prevent unbounded Metal memory growth
+        Memory.cacheLimit = 128 * 1024 * 1024 // 128 MB
 
         // Check microphone permission once at startup
         let micGranted = await AudioRecorder.checkMicPermission()
@@ -40,18 +46,33 @@ final class PipelineCoordinator {
             logger.info("microphone access available")
         }
 
-        // Load models
+        // Load ASR eagerly (always needed for push-to-talk latency)
         appState.statusMessage = "Loading ASR model..."
         do {
             try await transcriber.loadModel()
-            appState.statusMessage = "Loading LLM model..."
-            try await cleaner.loadModel()
+            memoryMonitor.asrModelLoaded = true
+
+            // Load LLM only if cleanup is enabled (lazy otherwise)
+            if appState.cleanupEnabled {
+                appState.statusMessage = "Loading LLM model..."
+                try await cleaner.loadModel()
+                memoryMonitor.llmModelLoaded = true
+            }
+
             appState.statusMessage = "Ready"
         } catch {
             logger.error("pipeline preflight failed")
             appState.statusMessage = "Model load failed: \(error.localizedDescription)"
             return
         }
+
+        // Wire memory pressure response
+        memoryMonitor.shedLLM = { [weak self] in
+            Task { @MainActor in
+                await self?.shedLLMModel()
+            }
+        }
+        memoryMonitor.startPolling()
 
         // Set up hotkey callbacks
         hotkeyManager.onRecordingStart = { [weak self] in
@@ -82,6 +103,7 @@ final class PipelineCoordinator {
     func stop() {
         hotkeyManager.stop()
         recorder.stop()
+        memoryMonitor.stopPolling()
         appState.isRecording = false
         appState.recordingStartedAt = nil
         cancelOverlayMetering()
@@ -156,6 +178,14 @@ final class PipelineCoordinator {
             // LLM cleanup
             var cleaned = afterCommands
             if appState.cleanupEnabled {
+                // Reload LLM on demand if it was shed due to memory pressure
+                if !(await cleaner.isModelLoaded) {
+                    appState.statusMessage = "Loading LLM..."
+                    overlay.show(state: .cleaning)
+                    logger.info("reloading LLM after memory shed")
+                    try await cleaner.loadModel()
+                    memoryMonitor.llmModelLoaded = true
+                }
                 appState.isCleaning = true
                 appState.statusMessage = "Cleaning..."
                 overlay.show(state: .cleaning)
@@ -202,6 +232,13 @@ final class PipelineCoordinator {
         }
 
         isProcessing = false
+    }
+
+    private func shedLLMModel() async {
+        logger.warning("shedding LLM model due to memory pressure")
+        await cleaner.unloadModel()
+        memoryMonitor.llmModelLoaded = false
+        Memory.clearCache()
     }
 
     private func cancelRecording() {
@@ -254,6 +291,9 @@ final class PipelineCoordinator {
         overlayLevelTask = Task { @MainActor [weak self] in
             while let self, self.recorder.isRecording {
                 self.overlay.updateRecordingLevels(self.recorder.currentWaveformLevels())
+                if self.recorder.bufferUsageFraction > 0.8 {
+                    self.appState.statusMessage = "Recording limit approaching..."
+                }
                 try? await Task.sleep(for: .milliseconds(48))
             }
             self?.overlayLevelTask = nil

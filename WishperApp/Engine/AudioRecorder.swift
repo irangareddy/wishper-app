@@ -17,6 +17,21 @@ final class AudioRecorder {
     nonisolated let sampleRate: Double = 16000
     private let waveformFloor: Float = 0.06
 
+    /// Maximum recording duration in seconds before the buffer starts trimming oldest samples.
+    static let defaultMaxRecordingDuration: TimeInterval = 300 // 5 minutes
+    private let maxBufferSamples: Int
+
+    init(maxRecordingDuration: TimeInterval = AudioRecorder.defaultMaxRecordingDuration) {
+        self.maxBufferSamples = Int(sampleRate * maxRecordingDuration)
+    }
+
+    /// Fraction of the buffer cap currently used (0.0–1.0).
+    var bufferUsageFraction: Double {
+        lock.lock()
+        defer { lock.unlock() }
+        return Double(audioBuffer.count) / Double(maxBufferSamples)
+    }
+
     /// Check and request microphone permission once at startup
     static func checkMicPermission() async -> Bool {
         let logger = WishperLog.voicePipeline
@@ -299,6 +314,12 @@ final class AudioRecorder {
 
         lock.lock()
         audioBuffer.append(contentsOf: samples)
+
+        // Enforce buffer cap: keep the most recent samples
+        if audioBuffer.count > maxBufferSamples {
+            audioBuffer.removeFirst(audioBuffer.count - maxBufferSamples)
+        }
+
         if normalizedLevel > smoothedLevel {
             smoothedLevel = (smoothedLevel * 0.65) + (normalizedLevel * 0.35)
         } else {
