@@ -10,7 +10,7 @@ final class PipelineCoordinator {
     let appState: AppState
     let memoryMonitor: MemoryMonitor
     private let recorder = AudioRecorder()
-    private let transcriber: Transcriber
+    private let streamingTranscriber: StreamingTranscriber
     private let cleaner: Cleaner
     private let injector = TextInjector()
     private let hotkeyManager = HotkeyManager()
@@ -26,7 +26,7 @@ final class PipelineCoordinator {
     init(appState: AppState, memoryMonitor: MemoryMonitor) {
         self.appState = appState
         self.memoryMonitor = memoryMonitor
-        self.transcriber = Transcriber(model: appState.selectedASRModel)
+        self.streamingTranscriber = StreamingTranscriber(model: appState.selectedASRModel)
         self.cleaner = Cleaner(model: appState.selectedLLMModel, enabled: appState.cleanupEnabled)
     }
 
@@ -46,10 +46,10 @@ final class PipelineCoordinator {
             logger.info("microphone access available")
         }
 
-        // Load ASR eagerly (always needed for push-to-talk latency)
-        appState.statusMessage = "Loading ASR model..."
+        // Load ASR + VAD eagerly (always needed for push-to-talk latency)
+        appState.statusMessage = "Loading ASR + VAD models..."
         do {
-            try await transcriber.loadModel()
+            try await streamingTranscriber.loadModel()
             memoryMonitor.asrModelLoaded = true
 
             // Load LLM only if cleanup is enabled (lazy otherwise)
@@ -173,6 +173,34 @@ final class PipelineCoordinator {
         cancelOverlayMetering()
         // Save the frontmost app BEFORE we do anything
         targetApp = NSWorkspace.shared.frontmostApplication
+
+        // Start streaming transcription session
+        Task {
+            await streamingTranscriber.startSession()
+
+            // Wire callbacks for live text updates
+            await MainActor.run {
+                self.appState.liveTranscript = ""
+            }
+            await streamingTranscriber.setCallbacks(
+                onSegment: { [weak self] text in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.appState.liveTranscript = await self.streamingTranscriber.accumulatedText
+                    }
+                },
+                onSpeech: nil
+            )
+        }
+
+        // Wire audio chunk feeding to streaming transcriber
+        recorder.onAudioChunk = { [weak self] samples in
+            guard let self else { return }
+            Task {
+                await self.streamingTranscriber.feedAudio(samples)
+            }
+        }
+
         do {
             try recorder.start()
             appState.isRecording = true
@@ -216,17 +244,19 @@ final class PipelineCoordinator {
 
         isProcessing = true
         let audio = recorder.getAudio()
+        recorder.onAudioChunk = nil // stop feeding
 
-        // Transcribe
+        // Finish streaming transcription (only processes last incomplete segment)
         appState.isTranscribing = true
-        appState.statusMessage = "Transcribing..."
+        appState.statusMessage = "Finishing transcription..."
         overlay.show(state: .transcribing)
-        logger.info("transcription started")
+        logger.info("finishing streaming transcription")
         do {
-            let raw = try await transcriber.transcribe(audioArray: audio)
+            let raw = await streamingTranscriber.finishSession()
             appState.lastTranscription = raw
             appState.isTranscribing = false
-            logger.info("transcription completed")
+            appState.liveTranscript = ""
+            logger.info("transcription completed: \(raw.count) chars")
 
             // Voice commands
             let afterCommands = VoiceCommands.process(raw)
@@ -299,6 +329,7 @@ final class PipelineCoordinator {
 
     private func cancelRecording() {
         recorder.stop()
+        recorder.onAudioChunk = nil
         cancelOverlayMetering()
         cancelOverlayHide()
         isProcessing = false
@@ -307,6 +338,7 @@ final class PipelineCoordinator {
         appState.isTranscribing = false
         appState.isCleaning = false
         appState.statusMessage = "Cancelled"
+        appState.liveTranscript = ""
         overlay.hide()
         logger.info("recording cancelled")
         if appState.soundsEnabled { sounds.error() }
@@ -347,6 +379,9 @@ final class PipelineCoordinator {
         overlayLevelTask = Task { @MainActor [weak self] in
             while let self, self.recorder.isRecording {
                 self.overlay.updateRecordingLevels(self.recorder.currentWaveformLevels())
+                // Update live transcript in overlay
+                let liveText = self.appState.liveTranscript
+                self.overlay.updateLiveTranscript(liveText)
                 if self.recorder.bufferUsageFraction > 0.8 {
                     self.appState.statusMessage = "Recording limit approaching..."
                 }

@@ -21,6 +21,9 @@ final class AudioRecorder {
     static let defaultMaxRecordingDuration: TimeInterval = 300 // 5 minutes
     private let maxBufferSamples: Int
 
+    /// Called with each batch of resampled audio samples (for streaming transcription).
+    nonisolated(unsafe) var onAudioChunk: (([Float]) -> Void)?
+
     init(maxRecordingDuration: TimeInterval = AudioRecorder.defaultMaxRecordingDuration) {
         self.maxBufferSamples = Int(sampleRate * maxRecordingDuration)
     }
@@ -326,6 +329,9 @@ final class AudioRecorder {
             smoothedLevel = (smoothedLevel * 0.86) + (normalizedLevel * 0.14)
         }
         lock.unlock()
+
+        // Stream audio to the transcriber for real-time VAD + ASR
+        onAudioChunk?(samples)
     }
 
     private static func makeHALAudioUnit() throws -> AudioUnit {

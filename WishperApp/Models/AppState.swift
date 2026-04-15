@@ -17,6 +17,7 @@ final class AppState: ObservableObject {
     @Published var soundsEnabled = true
     @Published var chipPosition: ChipPosition = .belowNotch
     @Published var statusMessage = "Ready"
+    @Published var liveTranscript = ""
     @Published var recordingStartedAt: Date?
     let stats = StatsTracker()
     var memoryMonitor: MemoryMonitor?

@@ -35,6 +35,7 @@ final class RecordingOverlayModel: ObservableObject {
     @Published var levels: [CGFloat] = Array(repeating: 0.08, count: 11)
     @Published var prompt: RecordingOverlayPrompt?
     @Published var chipPosition: ChipPosition = .belowNotch
+    @Published var liveTranscript: String = ""
 }
 
 // MARK: - Controller
@@ -147,6 +148,12 @@ final class RecordingOverlayController {
         refreshPanelFrame(animated: true)
     }
 
+    func updateLiveTranscript(_ text: String) {
+        guard model.state == .recording else { return }
+        model.liveTranscript = text
+        refreshPanelFrame(animated: true)
+    }
+
     // MARK: - Private
 
     private func updateMouseInteraction() {
@@ -242,7 +249,7 @@ private struct OverlayContent: View {
             IdleChip(onTap: onTap)
                 .transition(.scale(scale: 0.8).combined(with: .opacity))
         case .recording:
-            RecordingChip(levels: model.levels, onCancel: onCancel, onStop: onStop)
+            RecordingChip(levels: model.levels, liveText: model.liveTranscript, onCancel: onCancel, onStop: onStop)
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
         default:
             SmallPill {
@@ -270,43 +277,68 @@ private struct OverlayContent: View {
 
 private struct RecordingChip: View {
     let levels: [CGFloat]
+    let liveText: String
     let onCancel: () -> Void
     let onStop: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Close / Cancel button
-            Button(action: onCancel) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 24, height: 24)
-                    .contentShape(Circle())
+        VStack(spacing: 5) {
+            // Live transcript text (shows accumulated transcription)
+            if !liveText.isEmpty {
+                Text(liveTextTail)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(2)
+                    .truncationMode(.head)
+                    .frame(maxWidth: 260)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Color(white: 0.08).opacity(0.88),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .buttonStyle(.plain)
 
-            // Waveform bars
-            RecordingLevelBars(levels: levels)
-                .padding(.horizontal, 6)
+            // Control bar: [X] [waveform] [stop]
+            HStack(spacing: 0) {
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
 
-            // Stop button
-            Button(action: onStop) {
-                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(.white.opacity(0.85))
-                    .frame(width: 9, height: 9)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Circle())
+                RecordingLevelBars(levels: levels)
+                    .padding(.horizontal, 6)
+
+                Button(action: onStop) {
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(.white.opacity(0.85))
+                        .frame(width: 9, height: 9)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .background(chipBackground, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(chipBackground, in: Capsule())
-        .overlay {
-            Capsule()
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
+        .animation(.easeOut(duration: 0.2), value: liveText.isEmpty)
+    }
+
+    private var liveTextTail: String {
+        // Show last ~80 chars
+        if liveText.count <= 80 { return liveText }
+        return "..." + String(liveText.suffix(77))
     }
 
     private var chipBackground: some ShapeStyle {
