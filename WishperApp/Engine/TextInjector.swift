@@ -11,6 +11,8 @@ final class TextInjector {
     private static let textElementRoles: Set<String> = [
         kAXTextFieldRole as String,
         kAXTextAreaRole as String,
+        kAXComboBoxRole as String,
+        "AXWebArea",
     ]
 
     /// Inject text into the target app. Pass the target app's PID to bypass focus issues.
@@ -51,6 +53,11 @@ final class TextInjector {
         )
         guard findError == .success, let focused = focusedRef else { return false }
         let element = focused as! AXUIElement
+
+        // Guard: never inject into our own app's elements
+        var pidValue: pid_t = 0
+        AXUIElementGetPid(element, &pidValue)
+        if pidValue == ProcessInfo.processInfo.processIdentifier { return false }
 
         var roleRef: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)

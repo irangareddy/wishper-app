@@ -12,7 +12,11 @@ struct WishperApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarMenu(appState: appState, onOpenWindow: { openWindow(id: "main") })
+            MenuBarMenu(appState: appState, onOpenWindow: {
+                NSApp.setActivationPolicy(.regular)
+                openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
+            })
         } label: {
             if appState.isRecording {
                 Image(systemName: "waveform.circle.fill")
@@ -53,8 +57,8 @@ struct WishperApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        // When Dock icon is clicked and no window is visible, show the main window
         if !flag {
+            NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
             for window in NSApp.windows {
                 if window.title == "Wishper" {
@@ -64,5 +68,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         return true
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        // Switch back to accessory when no visible windows remain
+        let hasVisibleWindows = NSApp.windows.contains { window in
+            window.isVisible && !window.className.contains("Panel")
+        }
+        if !hasVisibleWindows {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 }
