@@ -327,23 +327,30 @@ private struct IdleChip: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Image(systemName: "mic.fill")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isHovering ? 0.95 : 0.55))
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.white.opacity(isHovering ? 0.95 : 0.50))
+
+                if isHovering {
+                    Text("Record")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                }
             }
-            .frame(width: 32, height: 32)
-            .background(idleBackground, in: Circle())
+            .padding(.horizontal, isHovering ? 12 : 10)
+            .padding(.vertical, 7)
+            .background(idleBackground, in: Capsule())
             .overlay {
-                Circle()
+                Capsule()
                     .strokeBorder(Color.white.opacity(isHovering ? 0.18 : 0.08), lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.15), radius: 5, y: 2)
-            .scaleEffect(isHovering ? 1.08 : 1.0)
+            .shadow(color: .black.opacity(isHovering ? 0.22 : 0.12), radius: isHovering ? 8 : 5, y: 2)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
+            withAnimation(.snappy(duration: 0.2)) {
                 isHovering = hovering
             }
         }
