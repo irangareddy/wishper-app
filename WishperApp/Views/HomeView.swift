@@ -22,8 +22,8 @@ struct HomeView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(Array(appState.history.enumerated()), id: \.offset) { item in
-                            TranscriptRow(entry: item.element)
+                        ForEach(appState.history) { entry in
+                            TranscriptRow(entry: entry)
                         }
                     }
                     .padding(.bottom, 24)
@@ -102,7 +102,7 @@ func formatNumber(_ n: Int) -> String {
 }
 
 struct TranscriptRow: View {
-    let entry: (date: Date, raw: String, cleaned: String)
+    let entry: TranscriptEntry
 
     @State private var showsRawText = false
 

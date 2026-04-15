@@ -379,9 +379,6 @@ final class PipelineCoordinator {
         overlayLevelTask = Task { @MainActor [weak self] in
             while let self, self.recorder.isRecording {
                 self.overlay.updateRecordingLevels(self.recorder.currentWaveformLevels())
-                // Update live transcript in overlay
-                let liveText = self.appState.liveTranscript
-                self.overlay.updateLiveTranscript(liveText)
                 if self.recorder.bufferUsageFraction > 0.8 {
                     self.appState.statusMessage = "Recording limit approaching..."
                 }

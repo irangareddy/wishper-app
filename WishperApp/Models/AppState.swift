@@ -1,6 +1,21 @@
 import Combine
 import SwiftUI
 
+/// A single transcript history entry, persistable to disk.
+struct TranscriptEntry: Codable, Identifiable {
+    let id: UUID
+    let date: Date
+    let raw: String
+    let cleaned: String
+
+    init(raw: String, cleaned: String) {
+        self.id = UUID()
+        self.date = Date()
+        self.raw = raw
+        self.cleaned = cleaned
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var isRecording = false
@@ -11,7 +26,7 @@ final class AppState: ObservableObject {
     @Published var selectedASRModel = "aufklarer/Qwen3-ASR-0.6B-MLX-4bit"
     @Published var selectedLLMModel = "mlx-community/Qwen3-0.6B-4bit"
     @Published var cleanupEnabled = false
-    @Published var hotkeyMode = "push_to_talk" // "push_to_talk" or "hands_free"
+    @Published var hotkeyMode = "push_to_talk"
     @Published var hotkeyConfig = HotkeyConfiguration.rightCommand
     @Published var handsFreeConfig = HotkeyConfiguration.fnSpace
     @Published var soundsEnabled = true
@@ -21,14 +36,38 @@ final class AppState: ObservableObject {
     @Published var recordingStartedAt: Date?
     let stats = StatsTracker()
     var memoryMonitor: MemoryMonitor?
-    /// Set by the app entry point so views can trigger mode switches.
     weak var coordinator: PipelineCoordinator?
 
-    // Transcript history
-    @Published var history: [(date: Date, raw: String, cleaned: String)] = []
+    // Transcript history — persisted to disk
+    @Published var history: [TranscriptEntry] = []
+
+    private static let historyFileURL: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = appSupport.appendingPathComponent("WishperApp", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("transcript_history.json")
+    }()
+
+    init() {
+        loadHistory()
+    }
 
     func addToHistory(raw: String, cleaned: String) {
-        history.insert((date: Date(), raw: raw, cleaned: cleaned), at: 0)
+        let entry = TranscriptEntry(raw: raw, cleaned: cleaned)
+        history.insert(entry, at: 0)
         if history.count > 50 { history.removeLast() }
+        saveHistory()
+    }
+
+    private func loadHistory() {
+        guard let data = try? Data(contentsOf: Self.historyFileURL),
+              let entries = try? JSONDecoder().decode([TranscriptEntry].self, from: data)
+        else { return }
+        history = entries
+    }
+
+    private func saveHistory() {
+        guard let data = try? JSONEncoder().encode(history) else { return }
+        try? data.write(to: Self.historyFileURL, options: .atomic)
     }
 }
