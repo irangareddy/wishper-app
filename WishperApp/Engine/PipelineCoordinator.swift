@@ -112,6 +112,9 @@ final class PipelineCoordinator {
         overlay.onCancelTapped = { [weak self] in
             self?.cancelRecording()
         }
+        overlay.onUndoCancel = { [weak self] in
+            self?.undoCancel()
+        }
 
         // Wire global paste last transcript (Ctrl+Cmd+V)
         hotkeyManager.onPasteLastTranscript = { [weak self] in
@@ -327,6 +330,8 @@ final class PipelineCoordinator {
         Memory.clearCache()
     }
 
+    private var cancelUndoTask: Task<Void, Never>?
+
     private func cancelRecording() {
         recorder.stop()
         recorder.onAudioChunk = nil
@@ -339,12 +344,28 @@ final class PipelineCoordinator {
         appState.isCleaning = false
         appState.statusMessage = "Cancelled"
         appState.liveTranscript = ""
-        overlay.hide()
-        logger.info("recording cancelled")
+        overlay.showCancelled()
+        logger.info("recording cancelled — showing undo")
         if appState.soundsEnabled { sounds.error() }
+
+        // Auto-dismiss after 3s (matches the progress bar)
+        cancelUndoTask?.cancel()
+        cancelUndoTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            self?.overlay.showIdle()
+            self?.appState.statusMessage = "Ready"
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             self?.appState.statusMessage = "Ready"
         }
+    }
+
+    private func undoCancel() {
+        cancelUndoTask?.cancel()
+        cancelUndoTask = nil
+        logger.info("undo cancel — resuming recording")
+        startRecording()
     }
 
     private func showReadyPrompt(for config: HotkeyConfiguration) {

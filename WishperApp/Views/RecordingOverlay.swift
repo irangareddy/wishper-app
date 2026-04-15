@@ -11,6 +11,7 @@ enum RecordingOverlayState: Equatable {
     case transcribing
     case cleaning
     case done
+    case cancelled
 }
 
 enum ChipPosition: String, CaseIterable, Identifiable {
@@ -51,9 +52,11 @@ final class RecordingOverlayController {
     var onStopTapped: (() -> Void)?
     /// Called when the user taps the close/cancel button during recording.
     var onCancelTapped: (() -> Void)?
+    /// Called when the user taps Undo after cancelling.
+    var onUndoCancel: (() -> Void)?
 
     init() {
-        let content = OverlayContent(model: model, onTap: {}, onStop: {}, onCancel: {})
+        let content = OverlayContent(model: model, onTap: {}, onStop: {}, onCancel: {}, onUndo: {})
         hostingView = NSHostingView(rootView: content)
         panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 220, height: 64),
@@ -76,7 +79,8 @@ final class RecordingOverlayController {
             model: model,
             onTap: { [weak self] in self?.onChipTapped?() },
             onStop: { [weak self] in self?.onStopTapped?() },
-            onCancel: { [weak self] in self?.onCancelTapped?() }
+            onCancel: { [weak self] in self?.onCancelTapped?() },
+            onUndo: { [weak self] in self?.onUndoCancel?() }
         )
         hostingView.rootView = wiredContent
 
@@ -138,8 +142,16 @@ final class RecordingOverlayController {
     }
 
     func hide() {
-        // Instead of hiding, return to idle
         showIdle()
+    }
+
+    func showCancelled() {
+        withAnimation(.snappy(duration: 0.18)) {
+            model.state = .cancelled
+        }
+        updateMouseInteraction()
+        refreshPanelFrame(animated: true)
+        panel.orderFront(nil)
     }
 
     func setPosition(_ position: ChipPosition) {
@@ -153,7 +165,7 @@ final class RecordingOverlayController {
     private func updateMouseInteraction() {
         // Clickable in idle and recording states, pass-through during processing
         switch model.state {
-        case .idle, .recording:
+        case .idle, .recording, .cancelled:
             panel.ignoresMouseEvents = false
         case .readyPrompt, .transcribing, .cleaning, .done:
             panel.ignoresMouseEvents = true
@@ -224,10 +236,18 @@ private struct OverlayContent: View {
     var onTap: () -> Void
     var onStop: () -> Void
     var onCancel: () -> Void
+    var onUndo: () -> Void
+
+    @State private var hoverTarget: HoverTarget?
+
+    private enum HoverTarget: Equatable {
+        case idle, cancel, done
+    }
 
     var body: some View {
         VStack(spacing: 7) {
-            if let prompt = model.prompt, model.state == .readyPrompt {
+            // Prompt bubble — shown for readyPrompt OR hover hints
+            if let prompt = activePrompt {
                 PromptBubble(prompt: prompt)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -238,16 +258,44 @@ private struct OverlayContent: View {
         .padding(.vertical, 8)
         .animation(.snappy(duration: 0.18, extraBounce: 0.02), value: model.state)
         .animation(.snappy(duration: 0.18, extraBounce: 0.02), value: model.prompt)
+        .animation(.snappy(duration: 0.15), value: hoverTarget)
+    }
+
+    private var activePrompt: RecordingOverlayPrompt? {
+        // Explicit prompt (readyPrompt state)
+        if let prompt = model.prompt, model.state == .readyPrompt {
+            return prompt
+        }
+        // Hover-driven hints
+        switch hoverTarget {
+        case .idle:
+            return RecordingOverlayPrompt(prefix: "Tap ", hotkey: "Right Command", suffix: " to dictate")
+        case .cancel:
+            return RecordingOverlayPrompt(prefix: "", hotkey: "Cancel", suffix: " recording")
+        case .done:
+            return RecordingOverlayPrompt(prefix: "", hotkey: "Done", suffix: " — transcribe & paste")
+        case nil:
+            return nil
+        }
     }
 
     @ViewBuilder
     private var chipView: some View {
         switch model.state {
         case .idle:
-            IdleChip(onTap: onTap)
+            IdleChip(onTap: onTap, onHover: { h in hoverTarget = h ? .idle : nil })
                 .transition(.scale(scale: 0.8).combined(with: .opacity))
         case .recording:
-            RecordingChip(levels: model.levels, onCancel: onCancel, onStop: onStop)
+            RecordingChip(
+                levels: model.levels,
+                onCancel: onCancel,
+                onStop: onStop,
+                onCancelHover: { h in hoverTarget = h ? .cancel : nil },
+                onStopHover: { h in hoverTarget = h ? .done : nil }
+            )
+            .transition(.scale(scale: 0.9).combined(with: .opacity))
+        case .cancelled:
+            CancelledChip(onUndo: onUndo)
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
         default:
             SmallPill {
@@ -260,7 +308,7 @@ private struct OverlayContent: View {
     private var indicator: some View {
         switch model.state {
         case .readyPrompt:
-            IdleDots()
+            EmptyView()
         case .transcribing, .cleaning:
             SlowActivityBars(baseHeights: [4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4])
         case .done:
@@ -277,52 +325,33 @@ private struct RecordingChip: View {
     let levels: [CGFloat]
     let onCancel: () -> Void
     let onStop: () -> Void
-
-    @State private var cancelHover = false
-    @State private var stopHover = false
+    var onCancelHover: (Bool) -> Void = { _ in }
+    var onStopHover: (Bool) -> Void = { _ in }
 
     var body: some View {
         HStack(spacing: 0) {
-            // Cancel button with hover hint
             Button(action: onCancel) {
-                HStack(spacing: 3) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.white.opacity(cancelHover ? 0.95 : 0.6))
-                    if cancelHover {
-                        Text("Cancel")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .transition(.opacity)
-                    }
-                }
-                .frame(minWidth: 24, minHeight: 24)
-                .contentShape(Rectangle())
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .onHover { h in withAnimation(.easeOut(duration: 0.12)) { cancelHover = h } }
+            .onHover { onCancelHover($0) }
 
             RecordingLevelBars(levels: levels)
                 .padding(.horizontal, 6)
 
-            // Done button with hover hint
             Button(action: onStop) {
-                HStack(spacing: 3) {
-                    if stopHover {
-                        Text("Done")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .transition(.opacity)
-                    }
-                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                        .fill(.white.opacity(stopHover ? 0.95 : 0.75))
-                        .frame(width: 9, height: 9)
-                }
-                .frame(minWidth: 24, minHeight: 24)
-                .contentShape(Rectangle())
+                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                    .fill(.white.opacity(0.75))
+                    .frame(width: 9, height: 9)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .onHover { h in withAnimation(.easeOut(duration: 0.12)) { stopHover = h } }
+            .onHover { onStopHover($0) }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
@@ -346,34 +375,71 @@ private struct RecordingChip: View {
     }
 }
 
+// MARK: - Cancelled Chip (transcript cancelled + undo)
+
+private struct CancelledChip: View {
+    let onUndo: () -> Void
+    @State private var progress: CGFloat = 1.0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Transcript cancelled")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.75))
+
+                Button(action: onUndo) {
+                    Text("Undo")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.92, green: 0.50, blue: 0.84))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 9)
+            .padding(.bottom, 6)
+
+            // Countdown progress bar
+            GeometryReader { geo in
+                Capsule()
+                    .fill(Color.white.opacity(0.25))
+                    .frame(width: geo.size.width * progress, height: 2)
+            }
+            .frame(height: 2)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
+        }
+        .background(chipBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
+        .onAppear {
+            withAnimation(.linear(duration: 3.0)) {
+                progress = 0.0
+            }
+        }
+    }
+
+    private var chipBackground: some ShapeStyle {
+        Color(white: 0.07).opacity(0.92)
+    }
+}
+
 // MARK: - Idle Chip (always visible, tappable)
 
 private struct IdleChip: View {
     let onTap: () -> Void
+    var onHover: (Bool) -> Void = { _ in }
     @State private var isHovering = false
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 3) {
-                // Idle bars
-                HStack(spacing: 2) {
-                    ForEach(0..<5, id: \.self) { _ in
-                        Capsule(style: .continuous)
-                            .fill(Color.white.opacity(isHovering ? 0.65 : 0.35))
-                            .frame(width: 2, height: isHovering ? 6 : 3.5)
-                    }
-                }
-
-                // Hover hint text
-                if isHovering {
-                    Text("Tap Right Command")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .transition(.opacity)
-                }
-            }
-            .padding(.horizontal, isHovering ? 10 : 8)
-            .padding(.vertical, 7)
+            Capsule()
+                .fill(Color.white.opacity(isHovering ? 0.45 : 0.25))
+                .frame(width: 4, height: 4)
+                .frame(width: 64, height: 28)
             .background(idleBackground, in: Capsule())
             .overlay {
                 Capsule()
@@ -386,6 +452,7 @@ private struct IdleChip: View {
             withAnimation(.easeOut(duration: 0.15)) {
                 isHovering = hovering
             }
+            onHover(hovering)
         }
     }
 
