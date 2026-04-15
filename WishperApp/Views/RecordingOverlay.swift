@@ -245,20 +245,21 @@ private struct OverlayContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 7) {
-            // Prompt bubble — shown for readyPrompt OR hover hints
-            if let prompt = activePrompt {
-                PromptBubble(prompt: prompt)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+        chipView
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            // Prompt bubble floats above the chip — does NOT affect layout size
+            .overlay(alignment: .top) {
+                if let prompt = activePrompt {
+                    PromptBubble(prompt: prompt)
+                        .offset(y: -38)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .allowsHitTesting(false)
+                }
             }
-
-            chipView
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .animation(.snappy(duration: 0.18, extraBounce: 0.02), value: model.state)
-        .animation(.snappy(duration: 0.18, extraBounce: 0.02), value: model.prompt)
-        .animation(.snappy(duration: 0.15), value: hoverTarget)
+            .animation(.snappy(duration: 0.18, extraBounce: 0.02), value: model.state)
+            .animation(.snappy(duration: 0.18, extraBounce: 0.02), value: model.prompt)
+            .animation(.snappy(duration: 0.15), value: hoverTarget)
     }
 
     private var activePrompt: RecordingOverlayPrompt? {
