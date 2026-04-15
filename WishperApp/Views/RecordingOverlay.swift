@@ -27,6 +27,14 @@ struct RecordingOverlayPrompt: Equatable {
     let suffix: String
 }
 
+// MARK: - Constants
+
+private enum ChipLayout {
+    static let width: CGFloat = 220
+    static let height: CGFloat = 40
+    static let cornerRadius: CGFloat = 20
+}
+
 // MARK: - Model
 
 @MainActor
@@ -46,20 +54,18 @@ final class RecordingOverlayController {
     private let model = RecordingOverlayModel()
     private let hostingView: NSHostingView<OverlayContent>
 
-    /// Called when the user taps the idle chip to start recording.
     var onChipTapped: (() -> Void)?
-    /// Called when the user taps the stop button during recording.
     var onStopTapped: (() -> Void)?
-    /// Called when the user taps the close/cancel button during recording.
     var onCancelTapped: (() -> Void)?
-    /// Called when the user taps Undo after cancelling.
     var onUndoCancel: (() -> Void)?
 
     init() {
         let content = OverlayContent(model: model, onTap: {}, onStop: {}, onCancel: {}, onUndo: {})
         hostingView = NSHostingView(rootView: content)
+
+        // Fixed panel size — never resizes
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 220, height: 64),
+            contentRect: NSRect(x: 0, y: 0, width: ChipLayout.width, height: ChipLayout.height),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -74,7 +80,6 @@ final class RecordingOverlayController {
         panel.hidesOnDeactivate = false
         panel.contentView = hostingView
 
-        // Rebuild hosting view with actual callbacks wired
         let wiredContent = OverlayContent(
             model: model,
             onTap: { [weak self] in self?.onChipTapped?() },
@@ -84,20 +89,17 @@ final class RecordingOverlayController {
         )
         hostingView.rootView = wiredContent
 
-        // Start in idle — always visible
         updateMouseInteraction()
+        positionPanel()
         showIdle()
     }
 
     func showIdle() {
-        withAnimation(.snappy(duration: 0.18, extraBounce: 0.02)) {
-            model.state = .idle
-            model.level = 0
-            model.levels = Array(repeating: 0.08, count: 11)
-            model.prompt = nil
-        }
+        model.state = .idle
+        model.level = 0
+        model.levels = Array(repeating: 0.08, count: 11)
+        model.prompt = nil
         updateMouseInteraction()
-        refreshPanelFrame(animated: panel.isVisible)
         panel.orderFront(nil)
     }
 
@@ -107,38 +109,27 @@ final class RecordingOverlayController {
         levels: [CGFloat]? = nil,
         prompt: RecordingOverlayPrompt? = nil
     ) {
-        withAnimation(.snappy(duration: 0.18, extraBounce: 0.02)) {
-            model.state = state
-            model.level = level
-            model.levels = normalizedLevels(from: levels, fallbackLevel: level)
-            model.prompt = prompt
-        }
+        model.state = state
+        model.level = level
+        model.levels = normalizedLevels(from: levels, fallbackLevel: level)
+        model.prompt = prompt
         updateMouseInteraction()
-        refreshPanelFrame(animated: panel.isVisible)
         panel.orderFront(nil)
     }
 
     func updateRecordingLevel(_ level: CGFloat) {
         guard model.state == .recording, panel.isVisible else { return }
-
         let clampedLevel = max(0, min(level, 1))
         guard abs(model.level - clampedLevel) > 0.01 else { return }
-
-        withAnimation(.interactiveSpring(response: 0.14, dampingFraction: 0.82, blendDuration: 0.08)) {
-            model.level = clampedLevel
-        }
+        model.level = clampedLevel
     }
 
     func updateRecordingLevels(_ levels: [CGFloat]) {
         guard model.state == .recording, panel.isVisible else { return }
-
         let normalized = normalizedLevels(from: levels, fallbackLevel: model.level)
         guard normalized != model.levels else { return }
-
-        withAnimation(.interactiveSpring(response: 0.12, dampingFraction: 0.84, blendDuration: 0.06)) {
-            model.levels = normalized
-            model.level = normalized.max() ?? model.level
-        }
+        model.levels = normalized
+        model.level = normalized.max() ?? model.level
     }
 
     func hide() {
@@ -146,24 +137,19 @@ final class RecordingOverlayController {
     }
 
     func showCancelled() {
-        withAnimation(.snappy(duration: 0.18)) {
-            model.state = .cancelled
-        }
+        model.state = .cancelled
         updateMouseInteraction()
-        refreshPanelFrame(animated: true)
         panel.orderFront(nil)
     }
 
     func setPosition(_ position: ChipPosition) {
         model.chipPosition = position
-        refreshPanelFrame(animated: true)
+        positionPanel()
     }
-
 
     // MARK: - Private
 
     private func updateMouseInteraction() {
-        // Clickable in idle and recording states, pass-through during processing
         switch model.state {
         case .idle, .recording, .cancelled:
             panel.ignoresMouseEvents = false
@@ -172,58 +158,30 @@ final class RecordingOverlayController {
         }
     }
 
-    private func refreshPanelFrame(animated: Bool) {
-        // Defer to avoid re-entrant layout during AppKit display cycles
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.hostingView.layoutSubtreeIfNeeded()
-
-            let fittingSize = self.hostingView.fittingSize
-            let width = max(44, fittingSize.width)
-            let height = max(22, fittingSize.height)
-            let frame = self.frameForOverlay(width: width, height: height)
-
-            if animated {
-                NSAnimationContext.runAnimationGroup { context in
-                    context.allowsImplicitAnimation = true
-                    context.duration = 0.16
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    self.panel.animator().setFrame(frame, display: true)
-                }
-            } else {
-                self.panel.setFrame(frame, display: true)
-            }
-        }
-    }
-
-    private func frameForOverlay(width: CGFloat, height: CGFloat) -> NSRect {
+    private func positionPanel() {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? .zero
         let screenFrame = screen?.frame ?? .zero
-        let x = visibleFrame.midX - (width / 2)
+        let x = visibleFrame.midX - (ChipLayout.width / 2)
 
         let y: CGFloat
         switch model.chipPosition {
         case .belowNotch:
-            // Top of screen, below the notch/menu bar
-            y = visibleFrame.maxY - height - 68
+            y = visibleFrame.maxY - ChipLayout.height - 68
         case .aboveDock:
-            // Bottom of screen, above the Dock
             let dockHeight = screenFrame.height - visibleFrame.height - (screenFrame.height - visibleFrame.maxY)
             y = visibleFrame.minY + max(dockHeight, 12) + 12
         }
 
-        return NSRect(x: x, y: y, width: width, height: height)
+        panel.setFrame(NSRect(x: x, y: y, width: ChipLayout.width, height: ChipLayout.height), display: true)
     }
 
     private func normalizedLevels(from levels: [CGFloat]?, fallbackLevel: CGFloat) -> [CGFloat] {
         let defaultLevels = Array(repeating: max(0.08, min(fallbackLevel, 1)), count: 11)
         guard let levels, !levels.isEmpty else { return defaultLevels }
-
         if levels.count >= 11 {
             return Array(levels.suffix(11)).map { max(0.08, min($0, 1)) }
         }
-
         let paddedLevels = Array(repeating: max(0.08, min(fallbackLevel, 1)), count: 11 - levels.count) + levels
         return paddedLevels.map { max(0.08, min($0, 1)) }
     }
@@ -238,145 +196,200 @@ private struct OverlayContent: View {
     var onCancel: () -> Void
     var onUndo: () -> Void
 
-    @State private var hoverTarget: HoverTarget?
-
-    private enum HoverTarget: Equatable {
-        case idle, cancel, done
+    var body: some View {
+        // Fixed-size container — chip content changes, frame never does
+        ZStack {
+            switch model.state {
+            case .idle:
+                IdleChip(onTap: onTap)
+            case .readyPrompt:
+                ReadyPromptChip(prompt: model.prompt)
+            case .recording:
+                RecordingChip(levels: model.levels, onCancel: onCancel, onStop: onStop)
+            case .transcribing, .cleaning:
+                ProcessingChip()
+            case .done:
+                DoneChip()
+            case .cancelled:
+                CancelledChip(onUndo: onUndo)
+            }
+        }
+        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .animation(.snappy(duration: 0.2), value: model.state)
     }
+}
+
+// MARK: - Chip Background
+
+private struct ChipBackground: View {
+    var body: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(white: 0.10).opacity(0.94),
+                        Color(white: 0.05).opacity(0.92)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .overlay {
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+            }
+    }
+}
+
+// MARK: - Idle Chip
+
+private struct IdleChip: View {
+    let onTap: () -> Void
+    @State private var isHovering = false
 
     var body: some View {
-        chipView
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            // Prompt bubble floats above the chip — does NOT affect layout size
-            .overlay(alignment: .top) {
-                if let prompt = activePrompt {
-                    PromptBubble(prompt: prompt)
-                        .offset(y: -38)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        .allowsHitTesting(false)
+        Button(action: onTap) {
+            ZStack {
+                if isHovering {
+                    // Expanded: "Start recording [Fn]"
+                    HStack(spacing: 6) {
+                        Text("Start recording")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.85))
+
+                        Text("Fn")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    .transition(.opacity)
+                } else {
+                    // Minimal thin bar
+                    Capsule()
+                        .fill(Color.white.opacity(0.3))
+                        .frame(width: 60, height: 5)
+                        .transition(.opacity)
                 }
             }
-            .animation(.snappy(duration: 0.18, extraBounce: 0.02), value: model.state)
-            .animation(.snappy(duration: 0.18, extraBounce: 0.02), value: model.prompt)
-            .animation(.snappy(duration: 0.15), value: hoverTarget)
-    }
-
-    private var activePrompt: RecordingOverlayPrompt? {
-        // Explicit prompt (readyPrompt state)
-        if let prompt = model.prompt, model.state == .readyPrompt {
-            return prompt
-        }
-        // Hover-driven hints
-        switch hoverTarget {
-        case .idle:
-            return RecordingOverlayPrompt(prefix: "Tap ", hotkey: "Right Command", suffix: " to dictate")
-        case .cancel:
-            return RecordingOverlayPrompt(prefix: "", hotkey: "Cancel", suffix: " recording")
-        case .done:
-            return RecordingOverlayPrompt(prefix: "", hotkey: "Done", suffix: " — transcribe & paste")
-        case nil:
-            return nil
-        }
-    }
-
-    @ViewBuilder
-    private var chipView: some View {
-        switch model.state {
-        case .idle:
-            IdleChip(onTap: onTap, onHover: { h in hoverTarget = h ? .idle : nil })
-                .transition(.scale(scale: 0.8).combined(with: .opacity))
-        case .recording:
-            RecordingChip(
-                levels: model.levels,
-                onCancel: onCancel,
-                onStop: onStop,
-                onCancelHover: { h in hoverTarget = h ? .cancel : nil },
-                onStopHover: { h in hoverTarget = h ? .done : nil }
+            .frame(width: ChipLayout.width, height: ChipLayout.height)
+            .background(
+                isHovering
+                    ? AnyShapeStyle(LinearGradient(
+                        colors: [Color(white: 0.10).opacity(0.94), Color(white: 0.05).opacity(0.92)],
+                        startPoint: .top, endPoint: .bottom))
+                    : AnyShapeStyle(Color.clear),
+                in: Capsule()
             )
-            .transition(.scale(scale: 0.9).combined(with: .opacity))
-        case .cancelled:
-            CancelledChip(onUndo: onUndo)
-                .transition(.scale(scale: 0.9).combined(with: .opacity))
-        default:
-            SmallPill {
-                indicator
+            .overlay {
+                if isHovering {
+                    Capsule().strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                }
             }
+            .shadow(color: .black.opacity(isHovering ? 0.18 : 0), radius: isHovering ? 6 : 0, y: 3)
+            .contentShape(Rectangle())
         }
-    }
-
-    @ViewBuilder
-    private var indicator: some View {
-        switch model.state {
-        case .readyPrompt:
-            EmptyView()
-        case .transcribing, .cleaning:
-            SlowActivityBars(baseHeights: [4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4])
-        case .done:
-            DonePulse()
-        default:
-            EmptyView()
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.snappy(duration: 0.2)) {
+                isHovering = hovering
+            }
         }
     }
 }
 
-// MARK: - Recording Chip (close + waveform + stop)
+// MARK: - Ready Prompt Chip
+
+private struct ReadyPromptChip: View {
+    let prompt: RecordingOverlayPrompt?
+
+    var body: some View {
+        Group {
+            if let prompt {
+                HStack(spacing: 0) {
+                    Text(prompt.prefix)
+                        .foregroundStyle(.white.opacity(0.75))
+                    Text(prompt.hotkey)
+                        .foregroundStyle(Color(red: 0.92, green: 0.50, blue: 0.84))
+                    Text(prompt.suffix)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+            }
+        }
+        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .background(ChipBackground())
+        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+    }
+}
+
+// MARK: - Recording Chip
 
 private struct RecordingChip: View {
     let levels: [CGFloat]
     let onCancel: () -> Void
     let onStop: () -> Void
-    var onCancelHover: (Bool) -> Void = { _ in }
-    var onStopHover: (Bool) -> Void = { _ in }
 
     var body: some View {
         HStack(spacing: 0) {
             Button(action: onCancel) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.white.opacity(0.6))
-                    .frame(width: 24, height: 24)
-                    .contentShape(Circle())
+                    .frame(width: 36, height: ChipLayout.height)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onHover { onCancelHover($0) }
 
             RecordingLevelBars(levels: levels)
-                .padding(.horizontal, 6)
+                .frame(maxWidth: .infinity)
 
             Button(action: onStop) {
                 RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(.white.opacity(0.75))
-                    .frame(width: 9, height: 9)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Circle())
+                    .fill(.white.opacity(0.8))
+                    .frame(width: 10, height: 10)
+                    .frame(width: 36, height: ChipLayout.height)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onHover { onStopHover($0) }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(chipBackground, in: Capsule())
-        .overlay {
-            Capsule()
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        }
+        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .background(ChipBackground())
         .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
-    }
-
-    private var chipBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                Color(white: 0.08).opacity(0.94),
-                Color(white: 0.05).opacity(0.92)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
     }
 }
 
-// MARK: - Cancelled Chip (transcript cancelled + undo)
+// MARK: - Processing Chip
+
+private struct ProcessingChip: View {
+    var body: some View {
+        SlowActivityBars(baseHeights: [4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4])
+            .frame(width: ChipLayout.width, height: ChipLayout.height)
+            .background(ChipBackground())
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+    }
+}
+
+// MARK: - Done Chip
+
+private struct DoneChip: View {
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<9, id: \.self) { _ in
+                Circle()
+                    .fill(Color.white.opacity(0.85))
+                    .frame(width: 2, height: 2)
+            }
+        }
+        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .background(ChipBackground())
+        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+    }
+}
+
+// MARK: - Cancelled Chip
 
 private struct CancelledChip: View {
     let onUndo: () -> Void
@@ -387,7 +400,7 @@ private struct CancelledChip: View {
             HStack(spacing: 8) {
                 Text("Transcript cancelled")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(.white.opacity(0.7))
 
                 Button(action: onUndo) {
                     Text("Undo")
@@ -396,154 +409,29 @@ private struct CancelledChip: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 9)
-            .padding(.bottom, 6)
+            .frame(height: ChipLayout.height - 4)
 
-            // Countdown progress bar
             GeometryReader { geo in
                 Capsule()
-                    .fill(Color.white.opacity(0.25))
+                    .fill(Color.white.opacity(0.2))
                     .frame(width: geo.size.width * progress, height: 2)
             }
             .frame(height: 2)
-            .padding(.horizontal, 10)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 2)
         }
-        .background(chipBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
+        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .background(ChipBackground())
+        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
         .onAppear {
             withAnimation(.linear(duration: 3.0)) {
                 progress = 0.0
             }
         }
     }
-
-    private var chipBackground: some ShapeStyle {
-        Color(white: 0.07).opacity(0.92)
-    }
 }
 
-// MARK: - Idle Chip (always visible, tappable)
-
-private struct IdleChip: View {
-    let onTap: () -> Void
-    var onHover: (Bool) -> Void = { _ in }
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: onTap) {
-            Capsule()
-                .fill(Color.white.opacity(isHovering ? 0.45 : 0.25))
-                .frame(width: 4, height: 4)
-                .frame(width: 64, height: 28)
-            .background(idleBackground, in: Capsule())
-            .overlay {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(isHovering ? 0.16 : 0.06), lineWidth: 0.5)
-            }
-            .shadow(color: .black.opacity(isHovering ? 0.20 : 0.10), radius: isHovering ? 6 : 4, y: 2)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
-                isHovering = hovering
-            }
-            onHover(hovering)
-        }
-    }
-
-    private var idleBackground: some ShapeStyle {
-        Color(white: 0.08).opacity(0.88)
-    }
-}
-
-// MARK: - Reusable Components
-
-private struct PromptBubble: View {
-    let prompt: RecordingOverlayPrompt
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Text(prompt.prefix)
-                .foregroundStyle(Color.white.opacity(0.96))
-
-            Text(prompt.hotkey)
-                .foregroundStyle(Color(red: 0.92, green: 0.50, blue: 0.84))
-
-            Text(prompt.suffix)
-                .foregroundStyle(Color.white.opacity(0.96))
-        }
-        .font(.system(size: 13, weight: .medium, design: .default))
-        .lineLimit(1)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(bubbleBackground, in: Capsule())
-        .overlay {
-            Capsule()
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
-    }
-
-    private var bubbleBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                Color(white: 0.10).opacity(0.94),
-                Color(white: 0.05).opacity(0.92)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-}
-
-private struct SmallPill<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        HStack {
-            content
-        }
-        .frame(minWidth: 74)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(pillBackground, in: Capsule())
-        .overlay {
-            Capsule()
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
-    }
-
-    private var pillBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                Color(white: 0.08).opacity(0.94),
-                Color(white: 0.05).opacity(0.92)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-}
-
-private struct IdleDots: View {
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<9, id: \.self) { _ in
-                Circle()
-                    .fill(Color.white.opacity(0.32))
-                    .frame(width: 1.7, height: 1.7)
-            }
-        }
-        .frame(height: 8)
-    }
-}
+// MARK: - Shared Components
 
 private struct RecordingLevelBars: View {
     let levels: [CGFloat]
@@ -552,19 +440,19 @@ private struct RecordingLevelBars: View {
         let emphasis: [CGFloat] = [0.58, 0.68, 0.80, 0.92, 1.02, 1.08, 1.02, 0.92, 0.80, 0.68, 0.58]
         let resolvedLevels = normalizedLevels
 
-        HStack(alignment: .center, spacing: 2) {
+        HStack(alignment: .center, spacing: 2.5) {
             ForEach(Array(resolvedLevels.enumerated()), id: \.offset) { index, level in
                 let profile = emphasis[index]
                 let baseHeight = 2.6 + (profile * 1.5)
-                let dynamicHeight = (level * 8.2) + (profile * 2.4)
+                let dynamicHeight = (level * 10) + (profile * 2.4)
                 let height = baseHeight + dynamicHeight
 
                 Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.98))
-                    .frame(width: 2.2, height: height)
+                    .fill(Color.white.opacity(0.95))
+                    .frame(width: 2.5, height: height)
             }
         }
-        .frame(height: 13)
+        .frame(height: 16)
         .animation(.interactiveSpring(response: 0.12, dampingFraction: 0.84, blendDuration: 0.06), value: resolvedLevels)
     }
 
@@ -572,7 +460,6 @@ private struct RecordingLevelBars: View {
         if levels.count >= 11 {
             return Array(levels.suffix(11)).map { max(0.08, min($0, 1)) }
         }
-
         let padding = Array(repeating: CGFloat(0.08), count: 11 - levels.count)
         return (padding + levels).map { max(0.08, min($0, 1)) }
     }
@@ -583,15 +470,15 @@ private struct SlowActivityBars: View {
     @State private var animate = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: 2) {
+        HStack(alignment: .center, spacing: 2.5) {
             ForEach(Array(baseHeights.enumerated()), id: \.offset) { index, baseHeight in
                 let delay = Double(index) * 0.045
 
                 Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.92))
+                    .fill(Color.white.opacity(0.85))
                     .frame(
-                        width: 2.2,
-                        height: (baseHeight * 0.54) + (animate ? 2.0 : 0.35)
+                        width: 2.5,
+                        height: (baseHeight * 0.54) + (animate ? 2.5 : 0.5)
                     )
                     .scaleEffect(y: animate ? 1.0 : 0.82, anchor: .center)
                     .animation(
@@ -600,26 +487,38 @@ private struct SlowActivityBars: View {
                     )
             }
         }
-        .frame(height: 12)
-        .onAppear {
-            animate = false
-            animate = true
-        }
-        .onDisappear {
-            animate = false
-        }
+        .frame(height: 14)
+        .onAppear { animate = false; animate = true }
+        .onDisappear { animate = false }
     }
 }
 
-private struct DonePulse: View {
+// MARK: - Legacy PromptBubble (kept for readyPrompt state)
+
+private struct PromptBubble: View {
+    let prompt: RecordingOverlayPrompt
+
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<9, id: \.self) { _ in
-                Circle()
-                    .fill(Color.white.opacity(0.92))
-                    .frame(width: 1.9, height: 1.9)
-            }
+        HStack(spacing: 0) {
+            Text(prompt.prefix)
+                .foregroundStyle(Color.white.opacity(0.96))
+            Text(prompt.hotkey)
+                .foregroundStyle(Color(red: 0.92, green: 0.50, blue: 0.84))
+            Text(prompt.suffix)
+                .foregroundStyle(Color.white.opacity(0.96))
         }
-        .frame(height: 8)
+        .font(.system(size: 13, weight: .medium, design: .default))
+        .lineLimit(1)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            LinearGradient(
+                colors: [Color(white: 0.10).opacity(0.94), Color(white: 0.05).opacity(0.92)],
+                startPoint: .top, endPoint: .bottom
+            ),
+            in: Capsule()
+        )
+        .overlay { Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1) }
+        .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
     }
 }
