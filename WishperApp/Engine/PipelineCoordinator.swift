@@ -90,29 +90,35 @@ final class PipelineCoordinator {
                 self?.cancelRecording()
             }
         }
-        let isHandsFree = appState.hotkeyMode == "hands_free"
-        let config = isHandsFree ? appState.handsFreeConfig : appState.hotkeyConfig
-        let mode: HotkeyManager.HotkeyMode = isHandsFree ? .toggle : .pushToTalk
-        hotkeyManager.start(
-            mode: mode,
-            keyCode: config.keyCode,
-            modifiers: config.modifierFlags
-        )
-        logger.info("voice pipeline ready mode=\(isHandsFree ? "handsFree" : "pushToTalk", privacy: .public) hotkey=\(config.displayString, privacy: .public)")
-        showReadyPrompt(for: config)
+        hotkeyManager.onHandsFreeToggle = { [weak self] shouldStart in
+            Task { @MainActor in
+                if shouldStart {
+                    self?.startRecording()
+                } else {
+                    await self?.stopAndProcess()
+                }
+            }
+        }
+        startHotkeys()
     }
 
     func switchHotkeyMode() {
-        let isHandsFree = appState.hotkeyMode == "hands_free"
-        let config = isHandsFree ? appState.handsFreeConfig : appState.hotkeyConfig
-        let mode: HotkeyManager.HotkeyMode = isHandsFree ? .toggle : .pushToTalk
         hotkeyManager.stop()
-        hotkeyManager.start(
-            mode: mode,
-            keyCode: config.keyCode,
-            modifiers: config.modifierFlags
+        startHotkeys()
+    }
+
+    private func startHotkeys() {
+        let pttConfig = appState.hotkeyConfig
+        let hfConfig = appState.handsFreeConfig
+
+        hotkeyManager.startDualMode(
+            pttKeyCode: pttConfig.keyCode,
+            pttModifiers: pttConfig.modifierFlags,
+            handsFreeKeyCode: hfConfig.keyCode,
+            handsFreeModifiers: hfConfig.modifierFlags
         )
-        logger.info("hotkey mode switched to \(isHandsFree ? "handsFree" : "pushToTalk", privacy: .public)")
+        logger.info("dual hotkey mode started ptt=\(pttConfig.displayString, privacy: .public) handsFree=\(hfConfig.displayString, privacy: .public)")
+        showReadyPrompt(for: pttConfig)
     }
 
     func stop() {

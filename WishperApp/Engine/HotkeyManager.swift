@@ -12,49 +12,104 @@ final class HotkeyManager {
         case toggle
     }
 
+    // MARK: - Callbacks
+
     var onRecordingStart: (() -> Void)?
     var onRecordingStop: (() -> Void)?
     var onCancel: (() -> Void)?
+    /// Called when hands-free toggle activates (start or stop).
+    var onHandsFreeToggle: ((_ startRecording: Bool) -> Void)?
+
+    // MARK: - State
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var globalMonitor: Any?
-    private var mode: HotkeyMode = .pushToTalk
-    private var isToggled = false
-    private var isTargetKeyDown = false
-    private var targetKeyCode: CGKeyCode = CGKeyCode(kVK_RightCommand)
-    private var targetModifiers: NSEvent.ModifierFlags = []
 
-    func configure(keyCode: CGKeyCode, modifiers: NSEvent.ModifierFlags = []) {
-        self.targetKeyCode = keyCode
-        self.targetModifiers = modifiers
-    }
+    // Push-to-talk config
+    private var pttKeyCode: CGKeyCode = CGKeyCode(kVK_RightCommand)
+    private var pttModifiers: NSEvent.ModifierFlags = []
 
+    // Hands-free toggle config (nil = disabled)
+    private var handsFreeKeyCode: CGKeyCode?
+    private var handsFreeModifiers: NSEvent.ModifierFlags = []
+
+    // Dual-mode state machine
+    private var isPttKeyDown = false
+    private var isHandsFreeActive = false
+    private var pendingPttStart: Task<Void, Never>?
+    private var comboWindowOpen = false
+
+    /// Disambiguation window: how long to wait after the PTT key goes down
+    /// before committing to push-to-talk (allows the combo key to arrive).
+    private let comboWindowDuration: UInt64 = 150_000_000 // 150ms in nanoseconds
+
+    // MARK: - Configuration
+
+    /// Start with push-to-talk only (backward compatible).
     func start(
         mode: HotkeyMode = .pushToTalk,
         keyCode: CGKeyCode = CGKeyCode(kVK_RightCommand),
         modifiers: NSEvent.ModifierFlags = []
     ) {
-        self.mode = mode
-        self.targetKeyCode = keyCode
-        self.targetModifiers = modifiers
-        self.isTargetKeyDown = false
+        self.pttKeyCode = keyCode
+        self.pttModifiers = modifiers
+        self.handsFreeKeyCode = nil
+        self.isPttKeyDown = false
+        self.isHandsFreeActive = false
+        setup()
+    }
 
+    /// Start with dual mode: push-to-talk + hands-free toggle on separate hotkeys.
+    func startDualMode(
+        pttKeyCode: CGKeyCode,
+        pttModifiers: NSEvent.ModifierFlags = [],
+        handsFreeKeyCode: CGKeyCode,
+        handsFreeModifiers: NSEvent.ModifierFlags
+    ) {
+        self.pttKeyCode = pttKeyCode
+        self.pttModifiers = pttModifiers
+        self.handsFreeKeyCode = handsFreeKeyCode
+        self.handsFreeModifiers = handsFreeModifiers
+        self.isPttKeyDown = false
+        self.isHandsFreeActive = false
+        setup()
+    }
+
+    private func setup() {
         let trusted = AXIsProcessTrusted()
         logger.info("hotkey monitor starting accessibilityTrusted=\(trusted)")
 
         if !trusted {
-            // Only prompt if not already granted
             let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
             AXIsProcessTrustedWithOptions(options)
             logger.info("accessibility prompt requested")
         }
 
-        // Try to create both monitors. NSEvent's global monitor is generally more reliable
-        // for modifier keys in MenuBarExtra apps, while the event tap provides extra visibility.
         createEventTap()
         createGlobalMonitor()
     }
+
+    func stop() {
+        pendingPttStart?.cancel()
+        pendingPttStart = nil
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+        }
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        eventTap = nil
+        runLoopSource = nil
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
+        }
+        globalMonitor = nil
+        isPttKeyDown = false
+        isHandsFreeActive = false
+    }
+
+    // MARK: - Event Tap
 
     private func createEventTap() {
         let eventMask =
@@ -75,7 +130,7 @@ final class HotkeyManager {
             ) -> Unmanaged<CGEvent>? in
                 guard let refcon else { return Unmanaged.passRetained(event) }
                 let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
-                manager.handleEvent(type: type, event: event)
+                manager.handleCGEvent(type: type, event: event)
                 return Unmanaged.passUnretained(event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -97,7 +152,7 @@ final class HotkeyManager {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.flagsChanged, .keyDown, .keyUp]
         ) { [weak self] event in
-            self?.handleEvent(event: event)
+            self?.handleNSEvent(event: event)
         }
 
         if globalMonitor != nil {
@@ -107,24 +162,9 @@ final class HotkeyManager {
         }
     }
 
-    func stop() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let source = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-        }
-        eventTap = nil
-        runLoopSource = nil
-        if let globalMonitor {
-            NSEvent.removeMonitor(globalMonitor)
-        }
-        globalMonitor = nil
-        isTargetKeyDown = false
-    }
+    // MARK: - Event Handling
 
-    private func handleEvent(type: CGEventType, event: CGEvent) {
-        // Handle tap being disabled by the system (e.g., timeout)
+    private func handleCGEvent(type: CGEventType, event: CGEvent) {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             logger.debug("event tap re-enabled after system disable")
             if let tap = eventTap {
@@ -136,95 +176,189 @@ final class HotkeyManager {
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = normalizedModifierFlags(from: event.flags)
 
+        processEvent(type: type, keyCode: keyCode, flags: flags, source: "CGEvent")
+    }
+
+    private func handleNSEvent(event: NSEvent) {
+        let keyCode = CGKeyCode(event.keyCode)
+        let flags = normalizedModifierFlags(from: event.modifierFlags)
+
+        let type: CGEventType
+        switch event.type {
+        case .flagsChanged: type = .flagsChanged
+        case .keyDown: type = .keyDown
+        case .keyUp: type = .keyUp
+        default: return
+        }
+
+        processEvent(type: type, keyCode: keyCode, flags: flags, source: "NSEvent")
+    }
+
+    private func processEvent(type: CGEventType, keyCode: CGKeyCode, flags: NSEvent.ModifierFlags, source: String) {
+        // Esc always cancels
         if type == .keyDown, keyCode == 53 {
-            onCancel?()
+            cancelAll()
             return
         }
 
+        let isDualMode = handsFreeKeyCode != nil
+
+        if isDualMode {
+            processDualMode(type: type, keyCode: keyCode, flags: flags, source: source)
+        } else {
+            processSingleMode(type: type, keyCode: keyCode, flags: flags, source: source)
+        }
+    }
+
+    // MARK: - Single Mode (backward compatible)
+
+    private func processSingleMode(type: CGEventType, keyCode: CGKeyCode, flags: NSEvent.ModifierFlags, source: String) {
         switch type {
         case .flagsChanged:
-            guard isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
+            guard isPttModifierOnly, keyCode == pttKeyCode else { return }
             guard let modifierFlag = modifierFlag(for: keyCode) else { return }
-            processTargetKeyTransition(
-                isPressed: flags.contains(modifierFlag),
-                source: "CGEvent"
-            )
+            processPttTransition(isPressed: flags.contains(modifierFlag), source: source)
         case .keyDown:
-            guard !isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
-            guard flags == normalizedTargetModifiers else { return }
-            processTargetKeyTransition(isPressed: true, source: "CGEvent")
+            guard !isPttModifierOnly, keyCode == pttKeyCode else { return }
+            guard flags == normalizedPttModifiers else { return }
+            processPttTransition(isPressed: true, source: source)
         case .keyUp:
-            guard !isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
-            processTargetKeyTransition(isPressed: false, source: "CGEvent")
+            guard !isPttModifierOnly, keyCode == pttKeyCode else { return }
+            processPttTransition(isPressed: false, source: source)
         default:
             return
         }
     }
 
-    private func handleEvent(event: NSEvent) {
-        let keyCode = CGKeyCode(event.keyCode)
-        let modifiers = normalizedModifierFlags(from: event.modifierFlags)
+    private func processPttTransition(isPressed: Bool, source: String) {
+        guard isPressed != isPttKeyDown else { return }
+        isPttKeyDown = isPressed
+        logger.info("ptt \(isPressed ? "pressed" : "released", privacy: .public) source=\(source, privacy: .public)")
 
-        if event.type == .keyDown, keyCode == 53 {
-            onCancel?()
-            return
-        }
-
-        switch event.type {
-        case .flagsChanged:
-            guard isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
-            guard let modifierFlag = modifierFlag(for: keyCode) else { return }
-            processTargetKeyTransition(
-                isPressed: modifiers.contains(modifierFlag),
-                source: "NSEvent"
-            )
-        case .keyDown:
-            guard !isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
-            guard modifiers == normalizedTargetModifiers else { return }
-            processTargetKeyTransition(isPressed: true, source: "NSEvent")
-        case .keyUp:
-            guard !isModifierOnlyHotkey, keyCode == targetKeyCode else { return }
-            processTargetKeyTransition(isPressed: false, source: "NSEvent")
-        default:
-            return
+        if isPressed {
+            onRecordingStart?()
+        } else {
+            onRecordingStop?()
         }
     }
 
-    private func processTargetKeyTransition(isPressed: Bool, source: String) {
-        guard isPressed != isTargetKeyDown else {
-            logger.debug("\(source, privacy: .public) ignored duplicate hotkey state")
-            return
-        }
+    // MARK: - Dual Mode
 
-        isTargetKeyDown = isPressed
-        logger.info("hotkey \(isPressed ? "pressed" : "released", privacy: .public) source=\(source, privacy: .public)")
+    /// In dual mode:
+    /// - PTT key alone (hold) → push-to-talk
+    /// - PTT key + combo key → hands-free toggle
+    /// - PTT key while hands-free is active → stop hands-free
+    private func processDualMode(type: CGEventType, keyCode: CGKeyCode, flags: NSEvent.ModifierFlags, source: String) {
+        guard let hfKeyCode = handsFreeKeyCode else { return }
 
-        switch mode {
-        case .pushToTalk:
-            if isPressed {
-                onRecordingStart?()
+        // Check if this is the hands-free combo key (e.g., Space with Fn modifier)
+        if type == .keyDown, keyCode == hfKeyCode, flags == handsFreeModifiers {
+            // Hands-free combo detected
+            pendingPttStart?.cancel()
+            pendingPttStart = nil
+            comboWindowOpen = false
+
+            if isHandsFreeActive {
+                // Stop hands-free recording
+                isHandsFreeActive = false
+                logger.info("hands-free stopped via combo source=\(source, privacy: .public)")
+                onHandsFreeToggle?(false)
             } else {
-                onRecordingStop?()
-            }
-        case .toggle:
-            if isPressed {
-                if isToggled {
-                    isToggled = false
-                    onRecordingStop?()
+                // Start hands-free recording
+                // If PTT already started a recording, it seamlessly becomes hands-free
+                isHandsFreeActive = true
+                if !isPttKeyDown {
+                    // PTT wasn't held — start fresh
+                    logger.info("hands-free started via combo source=\(source, privacy: .public)")
+                    onHandsFreeToggle?(true)
                 } else {
-                    isToggled = true
-                    onRecordingStart?()
+                    // PTT was held — recording already started, just upgrade to hands-free
+                    logger.info("hands-free upgraded from ptt source=\(source, privacy: .public)")
                 }
             }
+            return
+        }
+
+        // Handle PTT key (modifier-only key like Fn)
+        let isPttEvent: Bool
+        let pttPressed: Bool
+
+        if isPttModifierOnly {
+            guard type == .flagsChanged, keyCode == pttKeyCode else { return }
+            guard let modFlag = modifierFlag(for: keyCode) else { return }
+            isPttEvent = true
+            pttPressed = flags.contains(modFlag)
+        } else {
+            guard keyCode == pttKeyCode else { return }
+            if type == .keyDown {
+                guard flags == normalizedPttModifiers else { return }
+                isPttEvent = true
+                pttPressed = true
+            } else if type == .keyUp {
+                isPttEvent = true
+                pttPressed = false
+            } else {
+                return
+            }
+        }
+
+        guard isPttEvent, pttPressed != isPttKeyDown else { return }
+        isPttKeyDown = pttPressed
+
+        if pttPressed {
+            if isHandsFreeActive {
+                // PTT key pressed while hands-free is active → stop hands-free
+                isHandsFreeActive = false
+                logger.info("hands-free stopped via ptt key source=\(source, privacy: .public)")
+                onHandsFreeToggle?(false)
+            } else {
+                // PTT key down — wait for combo window before committing to push-to-talk
+                comboWindowOpen = true
+                pendingPttStart?.cancel()
+                pendingPttStart = Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: self?.comboWindowDuration ?? 150_000_000)
+                    guard let self, self.comboWindowOpen, !Task.isCancelled else { return }
+                    self.comboWindowOpen = false
+                    self.logger.info("ptt started (combo window expired) source=\(source, privacy: .public)")
+                    self.onRecordingStart?()
+                }
+            }
+        } else {
+            // PTT key released
+            if comboWindowOpen {
+                // Released before combo window expired — very short press
+                // Still treat as push-to-talk: start + immediate stop
+                pendingPttStart?.cancel()
+                pendingPttStart = nil
+                comboWindowOpen = false
+                // Too short to be useful — ignore
+                logger.debug("ptt key released during combo window — ignored")
+            } else if !isHandsFreeActive {
+                // Normal PTT release → stop recording
+                logger.info("ptt released source=\(source, privacy: .public)")
+                onRecordingStop?()
+            }
+            // If hands-free is active, PTT release is ignored (hands-free keeps going)
         }
     }
 
-    private var isModifierOnlyHotkey: Bool {
-        normalizedTargetModifiers.isEmpty && modifierFlag(for: targetKeyCode) != nil
+    private func cancelAll() {
+        pendingPttStart?.cancel()
+        pendingPttStart = nil
+        comboWindowOpen = false
+        isHandsFreeActive = false
+        isPttKeyDown = false
+        onCancel?()
     }
 
-    private var normalizedTargetModifiers: NSEvent.ModifierFlags {
-        normalizedModifierFlags(from: targetModifiers)
+    // MARK: - Helpers
+
+    private var isPttModifierOnly: Bool {
+        normalizedPttModifiers.isEmpty && modifierFlag(for: pttKeyCode) != nil
+    }
+
+    private var normalizedPttModifiers: NSEvent.ModifierFlags {
+        normalizedModifierFlags(from: pttModifiers)
     }
 
     private func normalizedModifierFlags(from flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
@@ -233,40 +367,22 @@ final class HotkeyManager {
 
     private func normalizedModifierFlags(from flags: CGEventFlags) -> NSEvent.ModifierFlags {
         var modifiers: NSEvent.ModifierFlags = []
-
-        if flags.contains(.maskCommand) {
-            modifiers.insert(.command)
-        }
-        if flags.contains(.maskControl) {
-            modifiers.insert(.control)
-        }
-        if flags.contains(.maskAlternate) {
-            modifiers.insert(.option)
-        }
-        if flags.contains(.maskShift) {
-            modifiers.insert(.shift)
-        }
-        if flags.contains(.maskSecondaryFn) {
-            modifiers.insert(.function)
-        }
-
+        if flags.contains(.maskCommand) { modifiers.insert(.command) }
+        if flags.contains(.maskControl) { modifiers.insert(.control) }
+        if flags.contains(.maskAlternate) { modifiers.insert(.option) }
+        if flags.contains(.maskShift) { modifiers.insert(.shift) }
+        if flags.contains(.maskSecondaryFn) { modifiers.insert(.function) }
         return modifiers
     }
 
     private func modifierFlag(for keyCode: CGKeyCode) -> NSEvent.ModifierFlags? {
         switch Int(keyCode) {
-        case Int(kVK_Command), Int(kVK_RightCommand):
-            return .command
-        case Int(kVK_Shift), Int(kVK_RightShift):
-            return .shift
-        case Int(kVK_Control), Int(kVK_RightControl):
-            return .control
-        case Int(kVK_Option), Int(kVK_RightOption):
-            return .option
-        case Int(kVK_Function):
-            return .function
-        default:
-            return nil
+        case Int(kVK_Command), Int(kVK_RightCommand): return .command
+        case Int(kVK_Shift), Int(kVK_RightShift): return .shift
+        case Int(kVK_Control), Int(kVK_RightControl): return .control
+        case Int(kVK_Option), Int(kVK_RightOption): return .option
+        case Int(kVK_Function): return .function
+        default: return nil
         }
     }
 }

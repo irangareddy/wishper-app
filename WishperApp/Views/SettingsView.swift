@@ -55,30 +55,24 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Recording Mode") {
-                Picker("Mode", selection: hotkeyModeBinding) {
-                    Text("Push to Talk").tag("push_to_talk")
-                    Text("Hands Free").tag("hands_free")
+            Section("Push to Talk") {
+                LabeledContent("Shortcut") {
+                    ShortcutRecorderView(configuration: $appState.hotkeyConfig)
+                }
+                Text("Hold to record, release to transcribe and paste.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Hands Free") {
+                Picker("Toggle Shortcut", selection: handsFreeBinding) {
+                    Text("Fn + Space").tag(HotkeyConfiguration.fnSpace)
+                    Text("Shift + Command + Space").tag(HotkeyConfiguration.shiftCommandSpace)
                 }
                 .pickerStyle(.radioGroup)
-
-                if appState.hotkeyMode == "push_to_talk" {
-                    LabeledContent("Shortcut") {
-                        ShortcutRecorderView(configuration: $appState.hotkeyConfig)
-                    }
-                    Text("Hold this key to record, release to transcribe and paste.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Picker("Toggle Shortcut", selection: $appState.handsFreeConfig) {
-                        Text("Fn + Space").tag(HotkeyConfiguration.fnSpace)
-                        Text("Shift + Command + Space").tag(HotkeyConfiguration.shiftCommandSpace)
-                    }
-                    .pickerStyle(.radioGroup)
-                    Text("Press once to start recording, press again to stop and transcribe.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Press once to start, press again to stop and transcribe. You can also press the push-to-talk key to stop hands-free recording.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Transcription") {
@@ -105,11 +99,11 @@ struct GeneralSettingsView: View {
         .onAppear(perform: syncLaunchAtLoginState)
     }
 
-    private var hotkeyModeBinding: Binding<String> {
+    private var handsFreeBinding: Binding<HotkeyConfiguration> {
         Binding(
-            get: { appState.hotkeyMode },
+            get: { appState.handsFreeConfig },
             set: { newValue in
-                appState.hotkeyMode = newValue
+                appState.handsFreeConfig = newValue
                 appState.coordinator?.switchHotkeyMode()
             }
         )
