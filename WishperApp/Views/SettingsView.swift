@@ -12,7 +12,7 @@ struct SettingsDetailView: View {
             // Header
             HStack {
                 Text("Settings")
-                    .font(.title2)
+                    .font(.custom("Lora", size: 22))
                     .fontWeight(.bold)
                 Spacer()
             }
@@ -243,10 +243,10 @@ struct AboutView: View {
 
             VStack(spacing: 6) {
                 Text("Wishper")
-                    .font(.largeTitle)
+                    .font(.custom("Lora", size: 30))
                     .fontWeight(.bold)
-                Text("Version 0.1.0")
-                    .font(.subheadline)
+                Text("Version 0.2.1")
+                    .font(.custom("Lora", size: 13))
                     .foregroundStyle(.secondary)
             }
 
@@ -264,7 +264,7 @@ struct AboutView: View {
             Spacer()
 
             Text("No cloud. No subscription. No data leaves your Mac.")
-                .font(.caption)
+                .font(.custom("Lora", size: 11))
                 .foregroundStyle(.tertiary)
                 .padding(.bottom, 16)
         }
