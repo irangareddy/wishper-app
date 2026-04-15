@@ -47,6 +47,7 @@ struct WishperApp: App {
         _appState = StateObject(wrappedValue: state)
         let coord = PipelineCoordinator(appState: state, memoryMonitor: monitor)
         _coordinator = State(initialValue: coord)
+        state.coordinator = coord
         logger.debug("app init scheduling pipeline start")
         Task { @MainActor in
             await coord.start()

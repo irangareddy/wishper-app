@@ -90,14 +90,29 @@ final class PipelineCoordinator {
                 self?.cancelRecording()
             }
         }
-        let config = appState.hotkeyConfig
+        let isHandsFree = appState.hotkeyMode == "hands_free"
+        let config = isHandsFree ? appState.handsFreeConfig : appState.hotkeyConfig
+        let mode: HotkeyManager.HotkeyMode = isHandsFree ? .toggle : .pushToTalk
         hotkeyManager.start(
-            mode: .pushToTalk,
+            mode: mode,
             keyCode: config.keyCode,
             modifiers: config.modifierFlags
         )
-        logger.info("voice pipeline ready hotkey=\(config.displayString, privacy: .public)")
+        logger.info("voice pipeline ready mode=\(isHandsFree ? "handsFree" : "pushToTalk", privacy: .public) hotkey=\(config.displayString, privacy: .public)")
         showReadyPrompt(for: config)
+    }
+
+    func switchHotkeyMode() {
+        let isHandsFree = appState.hotkeyMode == "hands_free"
+        let config = isHandsFree ? appState.handsFreeConfig : appState.hotkeyConfig
+        let mode: HotkeyManager.HotkeyMode = isHandsFree ? .toggle : .pushToTalk
+        hotkeyManager.stop()
+        hotkeyManager.start(
+            mode: mode,
+            keyCode: config.keyCode,
+            modifiers: config.modifierFlags
+        )
+        logger.info("hotkey mode switched to \(isHandsFree ? "handsFree" : "pushToTalk", privacy: .public)")
     }
 
     func stop() {

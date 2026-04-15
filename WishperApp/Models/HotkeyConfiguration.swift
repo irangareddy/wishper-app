@@ -1,6 +1,6 @@
 import AppKit
 
-struct HotkeyConfiguration: Codable, Equatable {
+struct HotkeyConfiguration: Codable, Equatable, Hashable {
     var modifierFlagsRawValue: UInt
     var keyCode: UInt16
     var keyChar: String?
@@ -57,6 +57,20 @@ struct HotkeyConfiguration: Codable, Equatable {
         modifierFlagsRawValue: (NSEvent.ModifierFlags.control.union(.option)).rawValue,
         keyCode: 0,
         keyChar: nil
+    )
+
+    /// Fn + Space — default hands-free toggle
+    static let fnSpace = HotkeyConfiguration(
+        modifierFlagsRawValue: NSEvent.ModifierFlags.function.rawValue,
+        keyCode: 49,  // kVK_Space
+        keyChar: "Space"
+    )
+
+    /// Right Shift + Right Command + Space
+    static let shiftCommandSpace = HotkeyConfiguration(
+        modifierFlagsRawValue: (NSEvent.ModifierFlags.shift.union(.command)).rawValue,
+        keyCode: 49,  // kVK_Space
+        keyChar: "Space"
     )
 }
 

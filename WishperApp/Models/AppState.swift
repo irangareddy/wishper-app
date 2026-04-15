@@ -11,13 +11,16 @@ final class AppState: ObservableObject {
     @Published var selectedASRModel = "aufklarer/Qwen3-ASR-0.6B-MLX-4bit"
     @Published var selectedLLMModel = "mlx-community/Qwen3-0.6B-4bit"
     @Published var cleanupEnabled = false
-    @Published var hotkeyMode = "push_to_talk"
+    @Published var hotkeyMode = "push_to_talk" // "push_to_talk" or "hands_free"
     @Published var hotkeyConfig = HotkeyConfiguration.rightCommand
+    @Published var handsFreeConfig = HotkeyConfiguration.fnSpace
     @Published var soundsEnabled = true
     @Published var statusMessage = "Ready"
     @Published var recordingStartedAt: Date?
     let stats = StatsTracker()
     var memoryMonitor: MemoryMonitor?
+    /// Set by the app entry point so views can trigger mode switches.
+    weak var coordinator: PipelineCoordinator?
 
     // Transcript history
     @Published var history: [(date: Date, raw: String, cleaned: String)] = []

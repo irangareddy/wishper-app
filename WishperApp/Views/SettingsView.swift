@@ -55,13 +55,30 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Shortcut") {
-                LabeledContent("Push-to-talk") {
-                    ShortcutRecorderView(configuration: $appState.hotkeyConfig)
+            Section("Recording Mode") {
+                Picker("Mode", selection: hotkeyModeBinding) {
+                    Text("Push to Talk").tag("push_to_talk")
+                    Text("Hands Free").tag("hands_free")
                 }
-                Text("Hold this key to record, release to transcribe and paste.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .pickerStyle(.radioGroup)
+
+                if appState.hotkeyMode == "push_to_talk" {
+                    LabeledContent("Shortcut") {
+                        ShortcutRecorderView(configuration: $appState.hotkeyConfig)
+                    }
+                    Text("Hold this key to record, release to transcribe and paste.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Toggle Shortcut", selection: $appState.handsFreeConfig) {
+                        Text("Fn + Space").tag(HotkeyConfiguration.fnSpace)
+                        Text("Shift + Command + Space").tag(HotkeyConfiguration.shiftCommandSpace)
+                    }
+                    .pickerStyle(.radioGroup)
+                    Text("Press once to start recording, press again to stop and transcribe.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Transcription") {
@@ -86,6 +103,16 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear(perform: syncLaunchAtLoginState)
+    }
+
+    private var hotkeyModeBinding: Binding<String> {
+        Binding(
+            get: { appState.hotkeyMode },
+            set: { newValue in
+                appState.hotkeyMode = newValue
+                appState.coordinator?.switchHotkeyMode()
+            }
+        )
     }
 
     private var launchAtLoginBinding: Binding<Bool> {
