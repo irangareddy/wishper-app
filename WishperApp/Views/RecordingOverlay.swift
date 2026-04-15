@@ -30,9 +30,9 @@ struct RecordingOverlayPrompt: Equatable {
 // MARK: - Constants
 
 private enum ChipLayout {
-    static let width: CGFloat = 196
-    static let height: CGFloat = 36
-    static let cornerRadius: CGFloat = 18
+    static let width: CGFloat = 196    // panel width (accommodates hover suggestion)
+    static let height: CGFloat = 28    // chip height (compact pills)
+    static let cornerRadius: CGFloat = 14
 }
 
 // MARK: - Model
@@ -63,9 +63,9 @@ final class RecordingOverlayController {
         let content = OverlayContent(model: model, onTap: {}, onStop: {}, onCancel: {}, onUndo: {})
         hostingView = NSHostingView(rootView: content)
 
-        // Fixed panel size — never resizes
+        // Fixed panel size — tall enough for bar + suggestion chip above
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: ChipLayout.width, height: ChipLayout.height),
+            contentRect: NSRect(x: 0, y: 0, width: ChipLayout.width, height: ChipLayout.height + 44),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -158,6 +158,8 @@ final class RecordingOverlayController {
         }
     }
 
+    private static let panelHeight: CGFloat = ChipLayout.height + 44
+
     private func positionPanel() {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? .zero
@@ -167,13 +169,13 @@ final class RecordingOverlayController {
         let y: CGFloat
         switch model.chipPosition {
         case .belowNotch:
-            y = visibleFrame.maxY - ChipLayout.height - 68
+            y = visibleFrame.maxY - Self.panelHeight - 48
         case .aboveDock:
             let dockHeight = screenFrame.height - visibleFrame.height - (screenFrame.height - visibleFrame.maxY)
-            y = visibleFrame.minY + max(dockHeight, 12) + 12
+            y = visibleFrame.minY + max(dockHeight, 12) + 8
         }
 
-        panel.setFrame(NSRect(x: x, y: y, width: ChipLayout.width, height: ChipLayout.height), display: true)
+        panel.setFrame(NSRect(x: x, y: y, width: ChipLayout.width, height: Self.panelHeight), display: true)
     }
 
     private func normalizedLevels(from levels: [CGFloat]?, fallbackLevel: CGFloat) -> [CGFloat] {
@@ -197,24 +199,32 @@ private struct OverlayContent: View {
     var onUndo: () -> Void
 
     var body: some View {
-        // Fixed-size container — chip content changes, frame never does
-        ZStack {
+        VStack(spacing: 4) {
+            // Active chip states appear ABOVE the idle bar
             switch model.state {
             case .idle:
-                IdleChip(onTap: onTap)
+                EmptyView()
             case .readyPrompt:
                 ReadyPromptChip(prompt: model.prompt)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             case .recording:
                 RecordingChip(levels: model.levels, onCancel: onCancel, onStop: onStop)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             case .transcribing, .cleaning:
                 ProcessingChip()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             case .done:
                 DoneChip()
+                    .transition(.opacity)
             case .cancelled:
                 CancelledChip(onUndo: onUndo)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+
+            // Idle bar — always at the bottom
+            IdleChip(onTap: onTap, isActive: model.state != .idle)
         }
-        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .frame(width: ChipLayout.width)
         .animation(.snappy(duration: 0.2), value: model.state)
     }
 }
@@ -245,13 +255,14 @@ private struct ChipBackground: View {
 
 private struct IdleChip: View {
     let onTap: () -> Void
+    var isActive: Bool = false
     @State private var isHovering = false
 
     var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                if isHovering {
-                    // Expanded: "Start recording [Fn]"
+        VStack(spacing: 4) {
+            // Hover suggestion appears ABOVE the bar on Y axis
+            if isHovering && !isActive {
+                Button(action: onTap) {
                     HStack(spacing: 6) {
                         Text("Start recording")
                             .font(.system(size: 12, weight: .medium))
@@ -264,33 +275,21 @@ private struct IdleChip: View {
                             .padding(.vertical, 2)
                             .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
                     }
-                    .transition(.opacity)
-                } else {
-                    // Minimal thin bar
-                    Capsule()
-                        .fill(Color.white.opacity(0.3))
-                        .frame(width: 50, height: 4)
-                        .transition(.opacity)
+                    .frame(width: ChipLayout.width, height: ChipLayout.height)
+                    .background(ChipBackground())
+                    .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
                 }
+                .buttonStyle(.plain)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .frame(width: ChipLayout.width, height: ChipLayout.height)
-            .background(
-                isHovering
-                    ? AnyShapeStyle(LinearGradient(
-                        colors: [Color(white: 0.10).opacity(0.94), Color(white: 0.05).opacity(0.92)],
-                        startPoint: .top, endPoint: .bottom))
-                    : AnyShapeStyle(Color.clear),
-                in: Capsule()
-            )
-            .overlay {
-                if isHovering {
-                    Capsule().strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-                }
-            }
-            .shadow(color: .black.opacity(isHovering ? 0.18 : 0), radius: isHovering ? 6 : 0, y: 3)
-            .contentShape(Rectangle())
+
+            // Thin bar — always visible at the bottom
+            Capsule()
+                .fill(Color.white.opacity(isActive ? 0.15 : (isHovering ? 0.45 : 0.3)))
+                .frame(width: 50, height: 4)
+                .contentShape(Rectangle().size(width: ChipLayout.width, height: 20).offset(x: -73, y: -8))
+                .onTapGesture { onTap() }
         }
-        .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(.snappy(duration: 0.2)) {
                 isHovering = hovering
