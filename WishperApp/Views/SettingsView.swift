@@ -82,6 +82,18 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Chip Position") {
+                Picker("Position", selection: chipPositionBinding) {
+                    ForEach(ChipPosition.allCases) { position in
+                        Text(position.rawValue).tag(position)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                Text("The floating chip is always visible. Tap it to start or stop recording.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Feedback") {
                 Toggle("Play sounds", isOn: $appState.soundsEnabled)
             }
@@ -97,6 +109,16 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear(perform: syncLaunchAtLoginState)
+    }
+
+    private var chipPositionBinding: Binding<ChipPosition> {
+        Binding(
+            get: { appState.chipPosition },
+            set: { newValue in
+                appState.chipPosition = newValue
+                appState.coordinator?.setChipPosition(newValue)
+            }
+        )
     }
 
     private var handsFreeBinding: Binding<HotkeyConfiguration> {

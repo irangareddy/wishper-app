@@ -99,7 +99,42 @@ final class PipelineCoordinator {
                 }
             }
         }
+
+        // Wire chip interactions
+        overlay.onChipTapped = { [weak self] in
+            self?.startRecording()
+        }
+        overlay.onStopTapped = { [weak self] in
+            Task { @MainActor in
+                await self?.stopAndProcess()
+            }
+        }
+        overlay.onCancelTapped = { [weak self] in
+            self?.cancelRecording()
+        }
+
+        // Wire global paste last transcript (Ctrl+Cmd+V)
+        hotkeyManager.onPasteLastTranscript = { [weak self] in
+            Task { @MainActor in
+                self?.pasteLastTranscript()
+            }
+        }
+
+        // Set chip position and show idle
+        overlay.setPosition(appState.chipPosition)
         startHotkeys()
+    }
+
+    func setChipPosition(_ position: ChipPosition) {
+        overlay.setPosition(position)
+    }
+
+    private func pasteLastTranscript() {
+        let text = appState.lastCleanedText.isEmpty ? appState.lastTranscription : appState.lastCleanedText
+        guard !text.isEmpty else { return }
+        let targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let success = injector.inject(text, targetPID: targetPID)
+        logger.info("paste last transcript success=\(success)")
     }
 
     func switchHotkeyMode() {
@@ -284,9 +319,9 @@ final class PipelineCoordinator {
         overlay.show(
             state: .readyPrompt,
             prompt: RecordingOverlayPrompt(
-                prefix: "Click or hold ",
+                prefix: "Tap mic or hold ",
                 hotkey: config.displayString,
-                suffix: " to start dictating"
+                suffix: " to dictate"
             )
         )
         scheduleOverlayHide(after: 4)

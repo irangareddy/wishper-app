@@ -15,6 +15,7 @@ final class AppState: ObservableObject {
     @Published var hotkeyConfig = HotkeyConfiguration.rightCommand
     @Published var handsFreeConfig = HotkeyConfiguration.fnSpace
     @Published var soundsEnabled = true
+    @Published var chipPosition: ChipPosition = .belowNotch
     @Published var statusMessage = "Ready"
     @Published var recordingStartedAt: Date?
     let stats = StatsTracker()

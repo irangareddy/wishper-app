@@ -19,6 +19,8 @@ final class HotkeyManager {
     var onCancel: (() -> Void)?
     /// Called when hands-free toggle activates (start or stop).
     var onHandsFreeToggle: ((_ startRecording: Bool) -> Void)?
+    /// Called when Ctrl+Cmd+V is pressed to paste last transcript.
+    var onPasteLastTranscript: (() -> Void)?
 
     // MARK: - State
 
@@ -190,6 +192,15 @@ final class HotkeyManager {
         // Esc always cancels
         if type == .keyDown, keyCode == 53 {
             cancelAll()
+            return
+        }
+
+        // Ctrl+Cmd+V → paste last transcript
+        if type == .keyDown,
+           keyCode == 9, // kVK_ANSI_V
+           flags.contains(.control), flags.contains(.command)
+        {
+            onPasteLastTranscript?()
             return
         }
 

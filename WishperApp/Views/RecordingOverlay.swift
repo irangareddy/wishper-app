@@ -2,12 +2,22 @@ import AppKit
 import Combine
 import SwiftUI
 
+// MARK: - Types
+
 enum RecordingOverlayState: Equatable {
+    case idle
     case readyPrompt
     case recording
     case transcribing
     case cleaning
     case done
+}
+
+enum ChipPosition: String, CaseIterable, Identifiable {
+    case belowNotch = "Below Notch"
+    case aboveDock = "Above Dock"
+
+    var id: String { rawValue }
 }
 
 struct RecordingOverlayPrompt: Equatable {
@@ -16,13 +26,18 @@ struct RecordingOverlayPrompt: Equatable {
     let suffix: String
 }
 
+// MARK: - Model
+
 @MainActor
 final class RecordingOverlayModel: ObservableObject {
-    @Published var state: RecordingOverlayState = .recording
+    @Published var state: RecordingOverlayState = .idle
     @Published var level: CGFloat = 0
     @Published var levels: [CGFloat] = Array(repeating: 0.08, count: 11)
     @Published var prompt: RecordingOverlayPrompt?
+    @Published var chipPosition: ChipPosition = .belowNotch
 }
+
+// MARK: - Controller
 
 @MainActor
 final class RecordingOverlayController {
@@ -30,8 +45,15 @@ final class RecordingOverlayController {
     private let model = RecordingOverlayModel()
     private let hostingView: NSHostingView<OverlayContent>
 
+    /// Called when the user taps the idle chip to start recording.
+    var onChipTapped: (() -> Void)?
+    /// Called when the user taps the stop button during recording.
+    var onStopTapped: (() -> Void)?
+    /// Called when the user taps the close/cancel button during recording.
+    var onCancelTapped: (() -> Void)?
+
     init() {
-        let content = OverlayContent(model: model)
+        let content = OverlayContent(model: model, onTap: {}, onStop: {}, onCancel: {})
         hostingView = NSHostingView(rootView: content)
         panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 220, height: 64),
@@ -47,8 +69,32 @@ final class RecordingOverlayController {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
-        panel.ignoresMouseEvents = true
         panel.contentView = hostingView
+
+        // Rebuild hosting view with actual callbacks wired
+        let wiredContent = OverlayContent(
+            model: model,
+            onTap: { [weak self] in self?.onChipTapped?() },
+            onStop: { [weak self] in self?.onStopTapped?() },
+            onCancel: { [weak self] in self?.onCancelTapped?() }
+        )
+        hostingView.rootView = wiredContent
+
+        // Start in idle — always visible
+        updateMouseInteraction()
+        showIdle()
+    }
+
+    func showIdle() {
+        withAnimation(.snappy(duration: 0.18, extraBounce: 0.02)) {
+            model.state = .idle
+            model.level = 0
+            model.levels = Array(repeating: 0.08, count: 11)
+            model.prompt = nil
+        }
+        updateMouseInteraction()
+        refreshPanelFrame(animated: panel.isVisible)
+        panel.orderFront(nil)
     }
 
     func show(
@@ -63,7 +109,7 @@ final class RecordingOverlayController {
             model.levels = normalizedLevels(from: levels, fallbackLevel: level)
             model.prompt = prompt
         }
-
+        updateMouseInteraction()
         refreshPanelFrame(animated: panel.isVisible)
         panel.orderFront(nil)
     }
@@ -92,14 +138,32 @@ final class RecordingOverlayController {
     }
 
     func hide() {
-        panel.orderOut(nil)
+        // Instead of hiding, return to idle
+        showIdle()
+    }
+
+    func setPosition(_ position: ChipPosition) {
+        model.chipPosition = position
+        refreshPanelFrame(animated: true)
+    }
+
+    // MARK: - Private
+
+    private func updateMouseInteraction() {
+        // Clickable in idle and recording states, pass-through during processing
+        switch model.state {
+        case .idle, .recording:
+            panel.ignoresMouseEvents = false
+        case .readyPrompt, .transcribing, .cleaning, .done:
+            panel.ignoresMouseEvents = true
+        }
     }
 
     private func refreshPanelFrame(animated: Bool) {
         hostingView.layoutSubtreeIfNeeded()
 
         let fittingSize = hostingView.fittingSize
-        let width = max(120, fittingSize.width)
+        let width = max(44, fittingSize.width)
         let height = max(22, fittingSize.height)
         let frame = frameForOverlay(width: width, height: height)
 
@@ -116,10 +180,22 @@ final class RecordingOverlayController {
     }
 
     private func frameForOverlay(width: CGFloat, height: CGFloat) -> NSRect {
-        let screen = NSApp.mainWindow?.screen ?? NSScreen.main ?? NSScreen.screens.first
+        let screen = NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? .zero
+        let screenFrame = screen?.frame ?? .zero
         let x = visibleFrame.midX - (width / 2)
-        let y = visibleFrame.maxY - height - 68
+
+        let y: CGFloat
+        switch model.chipPosition {
+        case .belowNotch:
+            // Top of screen, below the notch/menu bar
+            y = visibleFrame.maxY - height - 68
+        case .aboveDock:
+            // Bottom of screen, above the Dock
+            let dockHeight = screenFrame.height - visibleFrame.height - (screenFrame.height - visibleFrame.maxY)
+            y = visibleFrame.minY + max(dockHeight, 12) + 12
+        }
+
         return NSRect(x: x, y: y, width: width, height: height)
     }
 
@@ -136,8 +212,13 @@ final class RecordingOverlayController {
     }
 }
 
+// MARK: - Overlay Content
+
 private struct OverlayContent: View {
     @ObservedObject var model: RecordingOverlayModel
+    var onTap: () -> Void
+    var onStop: () -> Void
+    var onCancel: () -> Void
 
     var body: some View {
         VStack(spacing: 7) {
@@ -146,9 +227,7 @@ private struct OverlayContent: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            SmallPill {
-                indicator
-            }
+            chipView
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -157,19 +236,127 @@ private struct OverlayContent: View {
     }
 
     @ViewBuilder
+    private var chipView: some View {
+        switch model.state {
+        case .idle:
+            IdleChip(onTap: onTap)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
+        case .recording:
+            RecordingChip(levels: model.levels, onCancel: onCancel, onStop: onStop)
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
+        default:
+            SmallPill {
+                indicator
+            }
+        }
+    }
+
+    @ViewBuilder
     private var indicator: some View {
         switch model.state {
         case .readyPrompt:
             IdleDots()
-        case .recording:
-            RecordingLevelBars(levels: model.levels)
         case .transcribing, .cleaning:
             SlowActivityBars(baseHeights: [4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4])
         case .done:
             DonePulse()
+        default:
+            EmptyView()
         }
     }
 }
+
+// MARK: - Recording Chip (close + waveform + stop)
+
+private struct RecordingChip: View {
+    let levels: [CGFloat]
+    let onCancel: () -> Void
+    let onStop: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Close / Cancel button
+            Button(action: onCancel) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            // Waveform bars
+            RecordingLevelBars(levels: levels)
+                .padding(.horizontal, 6)
+
+            // Stop button
+            Button(action: onStop) {
+                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                    .fill(.white.opacity(0.85))
+                    .frame(width: 9, height: 9)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(chipBackground, in: Capsule())
+        .overlay {
+            Capsule()
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
+    }
+
+    private var chipBackground: some ShapeStyle {
+        LinearGradient(
+            colors: [
+                Color(white: 0.08).opacity(0.94),
+                Color(white: 0.05).opacity(0.92)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
+// MARK: - Idle Chip (always visible, tappable)
+
+private struct IdleChip: View {
+    let onTap: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 5) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white.opacity(isHovering ? 0.95 : 0.55))
+            }
+            .frame(width: 32, height: 32)
+            .background(idleBackground, in: Circle())
+            .overlay {
+                Circle()
+                    .strokeBorder(Color.white.opacity(isHovering ? 0.18 : 0.08), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.15), radius: 5, y: 2)
+            .scaleEffect(isHovering ? 1.08 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.15)) {
+                isHovering = hovering
+            }
+        }
+    }
+
+    private var idleBackground: some ShapeStyle {
+        Color(white: 0.08).opacity(0.88)
+    }
+}
+
+// MARK: - Reusable Components
 
 private struct PromptBubble: View {
     let prompt: RecordingOverlayPrompt
