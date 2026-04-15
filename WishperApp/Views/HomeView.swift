@@ -2,7 +2,6 @@ import AppKit
 import Combine
 import SwiftUI
 
-private let loraFont = "Lora"
 
 struct HomeView: View {
     @ObservedObject var appState: AppState
@@ -39,11 +38,11 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Welcome to Wishper")
-                    .font(.custom(loraFont, size: 28))
+                    .font(.largeTitle)
                     .fontWeight(.semibold)
 
                 Text("Review recent dictation history and keep track of your local transcript activity.")
-                    .font(.custom(loraFont, size: 14))
+                    .font(.body)
                     .foregroundStyle(.secondary)
             }
 
@@ -82,12 +81,12 @@ struct StatCard: View {
         VStack(spacing: 4) {
             HStack(spacing: 4) {
                 Text(value)
-                    .font(.custom(loraFont, size: 20))
+                    .font(.title2)
                     .fontWeight(.bold)
                 Text(emoji)
             }
             Text(label)
-                .font(.custom(loraFont, size: 11))
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -111,11 +110,10 @@ struct TranscriptRow: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.date, format: .dateTime.month(.abbreviated).day().hour().minute())
-                        .font(.custom(loraFont, size: 14))
-                        .fontWeight(.semibold)
+                        .font(.headline)
 
                     Text(showsRawText ? "Raw transcript" : "Cleaned transcript")
-                        .font(.custom(loraFont, size: 11))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -138,7 +136,6 @@ struct TranscriptRow: View {
             }
 
             Text(displayText)
-                .font(.custom(loraFont, size: 13))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
