@@ -179,7 +179,7 @@ final class PipelineCoordinator {
 
         // Start streaming transcription session
         Task {
-            await streamingTranscriber.startSession()
+            await streamingTranscriber.startSession(language: self.appState.transcriptionLanguage)
 
             // Wire callbacks for live text updates
             await MainActor.run {

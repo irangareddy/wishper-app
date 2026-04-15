@@ -76,6 +76,21 @@ struct GeneralSettingsView: View {
             }
 
             Section("Transcription") {
+                Picker("Language", selection: $appState.transcriptionLanguage) {
+                    Text("English").tag("en")
+                    Text("Chinese").tag("zh")
+                    Text("Japanese").tag("ja")
+                    Text("Korean").tag("ko")
+                    Text("French").tag("fr")
+                    Text("German").tag("de")
+                    Text("Spanish").tag("es")
+                    Divider()
+                    Text("Auto-detect").tag("")
+                }
+                Text("Set your primary language to avoid misdetection on short audio. Qwen3-ASR supports 52+ languages — use auto-detect for multilingual use.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle("Clean up with LLM", isOn: $appState.cleanupEnabled)
                 Text("Remove filler words, fix grammar, and adapt tone to the active app.")
                     .font(.caption)

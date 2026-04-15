@@ -23,6 +23,7 @@ actor StreamingTranscriber {
     private var currentSpeechStartSample: Int?
     private var finalizedSegments: [String] = []
     private var segmentCount = 0
+    private var language: String = "en"
 
     // Callbacks (nonisolated for use from audio thread)
     nonisolated(unsafe) var onSegmentFinalized: ((_ text: String) -> Void)?
@@ -67,14 +68,15 @@ actor StreamingTranscriber {
 
     // MARK: - Session Lifecycle
 
-    func startSession() {
+    func startSession(language: String = "en") {
         guard let vadModel else { return }
+        self.language = language
         audioBuffer = []
         finalizedSegments = []
         currentSpeechStartSample = nil
         segmentCount = 0
         vadProcessor = StreamingVADProcessor(model: vadModel, config: .sileroDefault)
-        logger.info("streaming session started")
+        logger.info("streaming session started language=\(language)")
     }
 
     /// Feed audio samples from the mic callback. Runs VAD and transcribes completed segments.
@@ -103,7 +105,7 @@ actor StreamingTranscriber {
                 }
 
                 let segmentAudio = Array(audioBuffer[startSample..<endSample])
-                let text = asrModel.transcribe(audio: segmentAudio, sampleRate: SileroVADModel.sampleRate)
+                let text = asrModel.transcribe(audio: segmentAudio, sampleRate: SileroVADModel.sampleRate, language: language)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
                 if !text.isEmpty {
@@ -141,7 +143,7 @@ actor StreamingTranscriber {
                 }
 
                 let segmentAudio = Array(audioBuffer[startSample..<endSample])
-                let text = asrModel.transcribe(audio: segmentAudio, sampleRate: SileroVADModel.sampleRate)
+                let text = asrModel.transcribe(audio: segmentAudio, sampleRate: SileroVADModel.sampleRate, language: language)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
                 if !text.isEmpty {
