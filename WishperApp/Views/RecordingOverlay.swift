@@ -30,9 +30,9 @@ struct RecordingOverlayPrompt: Equatable {
 // MARK: - Constants
 
 private enum ChipLayout {
-    static let width: CGFloat = 220
-    static let height: CGFloat = 40
-    static let cornerRadius: CGFloat = 20
+    static let width: CGFloat = 196
+    static let height: CGFloat = 36
+    static let cornerRadius: CGFloat = 18
 }
 
 // MARK: - Model
@@ -269,7 +269,7 @@ private struct IdleChip: View {
                     // Minimal thin bar
                     Capsule()
                         .fill(Color.white.opacity(0.3))
-                        .frame(width: 60, height: 5)
+                        .frame(width: 50, height: 4)
                         .transition(.opacity)
                 }
             }
