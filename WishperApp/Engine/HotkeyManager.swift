@@ -37,12 +37,6 @@ final class HotkeyManager {
     // Dual-mode state machine
     private var isPttKeyDown = false
     private var isHandsFreeActive = false
-    private var pendingPttStart: Task<Void, Never>?
-    private var comboWindowOpen = false
-
-    /// Disambiguation window: how long to wait after the PTT key goes down
-    /// before committing to push-to-talk (allows the combo key to arrive).
-    private let comboWindowDuration: UInt64 = 150_000_000 // 150ms in nanoseconds
 
     // MARK: - Configuration
 
@@ -91,8 +85,6 @@ final class HotkeyManager {
     }
 
     func stop() {
-        pendingPttStart?.cancel()
-        pendingPttStart = nil
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
@@ -245,107 +237,83 @@ final class HotkeyManager {
     // MARK: - Dual Mode
 
     /// In dual mode:
-    /// - PTT key alone (hold) → push-to-talk
-    /// - PTT key + combo key → hands-free toggle
+    /// - PTT key alone (hold) → push-to-talk (immediate, no delay)
+    /// - Combo key (e.g., Fn+Space) → hands-free toggle
+    /// - If combo arrives while PTT is held, upgrades to hands-free (PTT release ignored)
     /// - PTT key while hands-free is active → stop hands-free
     private func processDualMode(type: CGEventType, keyCode: CGKeyCode, flags: NSEvent.ModifierFlags, source: String) {
         guard let hfKeyCode = handsFreeKeyCode else { return }
 
         // Check if this is the hands-free combo key (e.g., Space with Fn modifier)
         if type == .keyDown, keyCode == hfKeyCode, flags == handsFreeModifiers {
-            // Hands-free combo detected
-            pendingPttStart?.cancel()
-            pendingPttStart = nil
-            comboWindowOpen = false
-
             if isHandsFreeActive {
-                // Stop hands-free recording
+                // Already in hands-free → stop
                 isHandsFreeActive = false
                 logger.info("hands-free stopped via combo source=\(source, privacy: .public)")
                 onHandsFreeToggle?(false)
             } else {
-                // Start hands-free recording
-                // If PTT already started a recording, it seamlessly becomes hands-free
+                // Activate hands-free
                 isHandsFreeActive = true
-                if !isPttKeyDown {
-                    // PTT wasn't held — start fresh
+                if isPttKeyDown {
+                    // PTT was already held and recording started — upgrade to hands-free
+                    // Recording continues, PTT release will be ignored
+                    logger.info("hands-free upgraded from ptt source=\(source, privacy: .public)")
+                } else {
+                    // Fresh hands-free start
                     logger.info("hands-free started via combo source=\(source, privacy: .public)")
                     onHandsFreeToggle?(true)
-                } else {
-                    // PTT was held — recording already started, just upgrade to hands-free
-                    logger.info("hands-free upgraded from ptt source=\(source, privacy: .public)")
                 }
             }
             return
         }
 
-        // Handle PTT key (modifier-only key like Fn)
-        let isPttEvent: Bool
+        // Handle PTT key
         let pttPressed: Bool
 
         if isPttModifierOnly {
             guard type == .flagsChanged, keyCode == pttKeyCode else { return }
             guard let modFlag = modifierFlag(for: keyCode) else { return }
-            isPttEvent = true
             pttPressed = flags.contains(modFlag)
         } else {
             guard keyCode == pttKeyCode else { return }
             if type == .keyDown {
                 guard flags == normalizedPttModifiers else { return }
-                isPttEvent = true
                 pttPressed = true
             } else if type == .keyUp {
-                isPttEvent = true
                 pttPressed = false
             } else {
                 return
             }
         }
 
-        guard isPttEvent, pttPressed != isPttKeyDown else { return }
+        guard pttPressed != isPttKeyDown else { return }
         isPttKeyDown = pttPressed
 
         if pttPressed {
             if isHandsFreeActive {
-                // PTT key pressed while hands-free is active → stop hands-free
+                // PTT pressed while hands-free → stop hands-free
                 isHandsFreeActive = false
                 logger.info("hands-free stopped via ptt key source=\(source, privacy: .public)")
                 onHandsFreeToggle?(false)
             } else {
-                // PTT key down — wait for combo window before committing to push-to-talk
-                comboWindowOpen = true
-                pendingPttStart?.cancel()
-                pendingPttStart = Task { @MainActor [weak self] in
-                    try? await Task.sleep(nanoseconds: self?.comboWindowDuration ?? 150_000_000)
-                    guard let self, self.comboWindowOpen, !Task.isCancelled else { return }
-                    self.comboWindowOpen = false
-                    self.logger.info("ptt started (combo window expired) source=\(source, privacy: .public)")
-                    self.onRecordingStart?()
-                }
+                // Start push-to-talk immediately — no delay
+                logger.info("ptt started source=\(source, privacy: .public)")
+                onRecordingStart?()
             }
         } else {
-            // PTT key released
-            if comboWindowOpen {
-                // Released before combo window expired — very short press
-                // Still treat as push-to-talk: start + immediate stop
-                pendingPttStart?.cancel()
-                pendingPttStart = nil
-                comboWindowOpen = false
-                // Too short to be useful — ignore
-                logger.debug("ptt key released during combo window — ignored")
-            } else if !isHandsFreeActive {
-                // Normal PTT release → stop recording
+            // PTT released
+            if isHandsFreeActive {
+                // Hands-free active — ignore PTT release, recording continues
+                logger.debug("ptt released during hands-free — ignored")
+            } else {
+                // Normal PTT release → stop and process
                 logger.info("ptt released source=\(source, privacy: .public)")
                 onRecordingStop?()
             }
-            // If hands-free is active, PTT release is ignored (hands-free keeps going)
         }
     }
 
     private func cancelAll() {
-        pendingPttStart?.cancel()
-        pendingPttStart = nil
-        comboWindowOpen = false
         isHandsFreeActive = false
         isPttKeyDown = false
         onCancel?()
