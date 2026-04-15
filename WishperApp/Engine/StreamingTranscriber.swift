@@ -123,16 +123,22 @@ actor StreamingTranscriber {
             return finalizedSegments.joined(separator: " ")
         }
 
-        // Flush VAD to close any open speech segment
+        // Flush VAD to close any open speech segment.
+        // flush() handles all open states (speech, pendingSilence, pendingSpeech)
+        // so no separate tail handling is needed.
         let flushEvents = vadProcessor.flush()
         for event in flushEvents {
             switch event {
-            case .speechStarted:
-                break
+            case .speechStarted(let time):
+                // flush() may emit speechStarted for pendingSpeech that meets duration threshold
+                currentSpeechStartSample = Int(time * Float(SileroVADModel.sampleRate))
             case .speechEnded(let segment):
                 guard let startSample = currentSpeechStartSample else { continue }
                 let endSample = min(Int(segment.endTime * Float(SileroVADModel.sampleRate)), audioBuffer.count)
-                guard startSample < endSample else { continue }
+                guard startSample < endSample else {
+                    currentSpeechStartSample = nil
+                    continue
+                }
 
                 let segmentAudio = Array(audioBuffer[startSample..<endSample])
                 let text = asrModel.transcribe(audio: segmentAudio, sampleRate: SileroVADModel.sampleRate)
@@ -142,23 +148,8 @@ actor StreamingTranscriber {
                     finalizedSegments.append(text)
                     segmentCount += 1
                     logger.info("final segment \(self.segmentCount) transcribed")
-                    onSegmentFinalized?(text)
                 }
-            }
-        }
-
-        // If there's speech in progress that VAD didn't close (no silence at end),
-        // transcribe the remaining audio from the speech start
-        if let startSample = currentSpeechStartSample, startSample < audioBuffer.count {
-            let remainingAudio = Array(audioBuffer[startSample...])
-            if remainingAudio.count > SileroVADModel.sampleRate / 4 { // at least 0.25s
-                let text = asrModel.transcribe(audio: remainingAudio, sampleRate: SileroVADModel.sampleRate)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !text.isEmpty {
-                    finalizedSegments.append(text)
-                    segmentCount += 1
-                    logger.info("tail segment transcribed (\(remainingAudio.count / SileroVADModel.sampleRate)s)")
-                }
+                currentSpeechStartSample = nil
             }
         }
 
