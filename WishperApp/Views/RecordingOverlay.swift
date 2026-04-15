@@ -169,7 +169,7 @@ final class RecordingOverlayController {
         let y: CGFloat
         switch model.chipPosition {
         case .belowNotch:
-            y = visibleFrame.maxY - Self.panelHeight - 48
+            y = visibleFrame.maxY - Self.panelHeight - 4
         case .aboveDock:
             let dockHeight = screenFrame.height - visibleFrame.height - (screenFrame.height - visibleFrame.maxY)
             y = visibleFrame.minY + max(dockHeight, 12) + 8
@@ -265,11 +265,11 @@ private struct IdleChip: View {
                 Button(action: onTap) {
                     HStack(spacing: 6) {
                         Text("Start recording")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.85))
 
                         Text("Fn")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white.opacity(0.5))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -314,7 +314,7 @@ private struct ReadyPromptChip: View {
                     Text(prompt.suffix)
                         .foregroundStyle(.white.opacity(0.75))
                 }
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .lineLimit(1)
             }
         }
@@ -398,12 +398,12 @@ private struct CancelledChip: View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Text("Transcript cancelled")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
 
                 Button(action: onUndo) {
                     Text("Undo")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundStyle(Color(red: 0.92, green: 0.50, blue: 0.84))
                 }
                 .buttonStyle(.plain)
