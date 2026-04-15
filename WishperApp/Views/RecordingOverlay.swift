@@ -161,22 +161,26 @@ final class RecordingOverlayController {
     }
 
     private func refreshPanelFrame(animated: Bool) {
-        hostingView.layoutSubtreeIfNeeded()
+        // Defer to avoid re-entrant layout during AppKit display cycles
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.hostingView.layoutSubtreeIfNeeded()
 
-        let fittingSize = hostingView.fittingSize
-        let width = max(44, fittingSize.width)
-        let height = max(22, fittingSize.height)
-        let frame = frameForOverlay(width: width, height: height)
+            let fittingSize = self.hostingView.fittingSize
+            let width = max(44, fittingSize.width)
+            let height = max(22, fittingSize.height)
+            let frame = self.frameForOverlay(width: width, height: height)
 
-        if animated {
-            NSAnimationContext.runAnimationGroup { context in
-                context.allowsImplicitAnimation = true
-                context.duration = 0.16
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                panel.animator().setFrame(frame, display: true)
+            if animated {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.allowsImplicitAnimation = true
+                    context.duration = 0.16
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    self.panel.animator().setFrame(frame, display: true)
+                }
+            } else {
+                self.panel.setFrame(frame, display: true)
             }
-        } else {
-            panel.setFrame(frame, display: true)
         }
     }
 
@@ -327,30 +331,25 @@ private struct IdleChip: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 4) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isHovering ? 0.95 : 0.50))
-
-                if isHovering {
-                    Text("Record")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
+            // Simple rounded capsule bar — no icon, no text
+            HStack(spacing: 2) {
+                ForEach(0..<5, id: \.self) { _ in
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(isHovering ? 0.65 : 0.35))
+                        .frame(width: 2, height: isHovering ? 6 : 3.5)
                 }
             }
-            .padding(.horizontal, isHovering ? 12 : 10)
-            .padding(.vertical, 7)
+            .frame(width: 32, height: 28)
             .background(idleBackground, in: Capsule())
             .overlay {
                 Capsule()
-                    .strokeBorder(Color.white.opacity(isHovering ? 0.18 : 0.08), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(isHovering ? 0.16 : 0.06), lineWidth: 0.5)
             }
-            .shadow(color: .black.opacity(isHovering ? 0.22 : 0.12), radius: isHovering ? 8 : 5, y: 2)
+            .shadow(color: .black.opacity(isHovering ? 0.20 : 0.10), radius: isHovering ? 6 : 4, y: 2)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.snappy(duration: 0.2)) {
+            withAnimation(.easeOut(duration: 0.15)) {
                 isHovering = hovering
             }
         }
