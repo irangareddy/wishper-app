@@ -278,28 +278,51 @@ private struct RecordingChip: View {
     let onCancel: () -> Void
     let onStop: () -> Void
 
+    @State private var cancelHover = false
+    @State private var stopHover = false
+
     var body: some View {
         HStack(spacing: 0) {
+            // Cancel button with hover hint
             Button(action: onCancel) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 24, height: 24)
-                    .contentShape(Circle())
+                HStack(spacing: 3) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white.opacity(cancelHover ? 0.95 : 0.6))
+                    if cancelHover {
+                        Text("Cancel")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .transition(.opacity)
+                    }
+                }
+                .frame(minWidth: 24, minHeight: 24)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { h in withAnimation(.easeOut(duration: 0.12)) { cancelHover = h } }
 
             RecordingLevelBars(levels: levels)
                 .padding(.horizontal, 6)
 
+            // Done button with hover hint
             Button(action: onStop) {
-                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(.white.opacity(0.85))
-                    .frame(width: 9, height: 9)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Circle())
+                HStack(spacing: 3) {
+                    if stopHover {
+                        Text("Done")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .transition(.opacity)
+                    }
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(.white.opacity(stopHover ? 0.95 : 0.75))
+                        .frame(width: 9, height: 9)
+                }
+                .frame(minWidth: 24, minHeight: 24)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { h in withAnimation(.easeOut(duration: 0.12)) { stopHover = h } }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
@@ -331,15 +354,26 @@ private struct IdleChip: View {
 
     var body: some View {
         Button(action: onTap) {
-            // Simple rounded capsule bar — no icon, no text
-            HStack(spacing: 2) {
-                ForEach(0..<5, id: \.self) { _ in
-                    Capsule(style: .continuous)
-                        .fill(Color.white.opacity(isHovering ? 0.65 : 0.35))
-                        .frame(width: 2, height: isHovering ? 6 : 3.5)
+            HStack(spacing: 3) {
+                // Idle bars
+                HStack(spacing: 2) {
+                    ForEach(0..<5, id: \.self) { _ in
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(isHovering ? 0.65 : 0.35))
+                            .frame(width: 2, height: isHovering ? 6 : 3.5)
+                    }
+                }
+
+                // Hover hint text
+                if isHovering {
+                    Text("Tap Right Command")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .transition(.opacity)
                 }
             }
-            .frame(width: 32, height: 28)
+            .padding(.horizontal, isHovering ? 10 : 8)
+            .padding(.vertical, 7)
             .background(idleBackground, in: Capsule())
             .overlay {
                 Capsule()
