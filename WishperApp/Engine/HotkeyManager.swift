@@ -39,6 +39,7 @@ final class HotkeyManager {
     // Dual-mode state machine
     private var isPttKeyDown = false
     private var isHandsFreeActive = false
+    private var lastComboTime: CFAbsoluteTime = 0
 
     // MARK: - Configuration
 
@@ -260,7 +261,12 @@ final class HotkeyManager {
         // Also match when PTT (fn) is already held and the combo key arrives.
         let isComboKey = type == .keyDown && keyCode == hfKeyCode &&
             (flags.isSuperset(of: handsFreeModifiers) || (isPttKeyDown && keyCode == hfKeyCode))
-        if isComboKey {
+
+        // Debounce: both CGEvent tap and NSEvent monitor fire for the same keypress.
+        // Without this, hands-free toggles ON then immediately OFF.
+        let now = CFAbsoluteTimeGetCurrent()
+        if isComboKey, now - lastComboTime > 0.1 {
+            lastComboTime = now
             if isHandsFreeActive {
                 // Already in hands-free → stop
                 isHandsFreeActive = false
