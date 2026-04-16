@@ -1,165 +1,177 @@
 import AppKit
-import Combine
 import SwiftUI
 
 struct HomeView: View {
     @ObservedObject var appState: AppState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 0) {
             header
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .padding(.bottom, 20)
+
+            Divider()
 
             if appState.history.isEmpty {
-                Spacer()
-                ContentUnavailableView(
-                    "No Transcripts Yet",
-                    systemImage: "waveform",
-                    description: Text("Start dictating and your transcript history will appear here.")
-                )
-                Spacer()
+                emptyState
             } else {
-                List {
-                    ForEach(appState.history) { entry in
-                        TranscriptRow(
-                            entry: entry,
-                            onDelete: { appState.deleteFromHistory(id: entry.id) }
-                        )
-                        .listRowSeparator(.visible)
-                        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
-                    }
-                }
-                .listStyle(.plain)
+                transcriptList
             }
         }
-        .padding(.top, 24)
-        .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    // MARK: - Header
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Welcome to Wishper")
-                    .font(.largeTitle)
-                    .fontWeight(.semibold)
+            Text("Transcripts")
+                .font(.title)
+                .fontWeight(.bold)
 
-                Text("Review recent dictation history and keep track of your local transcript activity.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                StatCard(value: "\(appState.stats.weeklyStreak)", label: "Week Streak")
+                StatCard(value: "\(appState.stats.averageWPM)", label: "Avg WPM")
+                StatCard(value: formatNumber(appState.stats.totalWords), label: "Total Words")
+                StatCard(value: "\(appState.stats.appsUsed.count)", label: "Apps Used")
             }
+        }
+    }
 
-            HStack(spacing: 16) {
-                StatCard(
-                    value: "\(appState.stats.weeklyStreak)",
-                    label: "Week Streak",
-                    emoji: appState.stats.weeklyStreak >= 4 ? "⭐" : "📅"
-                )
-                StatCard(
-                    value: "\(appState.stats.averageWPM)",
-                    label: "Avg WPM",
-                    emoji: appState.stats.averageWPM >= 100 ? "🏆" : "⚡"
-                )
-                StatCard(
-                    value: formatNumber(appState.stats.totalWords),
-                    label: "Total Words",
-                    emoji: appState.stats.totalWords >= 10000 ? "🚀" : "📝"
-                )
-                StatCard(
-                    value: "\(appState.stats.appsUsed.count)",
-                    label: "Apps Used",
-                    emoji: appState.stats.appsUsed.count >= 10 ? "🏆" : "📱"
-                )
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack {
+            Spacer()
+            ContentUnavailableView(
+                "No Transcripts Yet",
+                systemImage: "waveform",
+                description: Text("Start dictating and your history will appear here.")
+            )
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Transcript List
+
+    private var transcriptList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(appState.history) { entry in
+                    TranscriptRow(
+                        entry: entry,
+                        onDelete: { appState.deleteFromHistory(id: entry.id) }
+                    )
+
+                    if entry.id != appState.history.last?.id {
+                        Divider()
+                            .padding(.leading, 72)
+                    }
+                }
             }
+            .padding(.bottom, 24)
         }
     }
 }
 
-struct StatCard: View {
+// MARK: - Stat Card
+
+private struct StatCard: View {
     let value: String
     let label: String
-    let emoji: String
 
     var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 4) {
-                Text(value)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                Text(emoji)
-            }
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.title3)
+                .fontWeight(.semibold)
+                .monospacedDigit()
             Text(label)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+        .padding(.vertical, 10)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
-func formatNumber(_ n: Int) -> String {
+private func formatNumber(_ n: Int) -> String {
     if n >= 1000 { return String(format: "%.1fK", Double(n) / 1000.0) }
     return "\(n)"
 }
 
 // MARK: - Transcript Row
 
-struct TranscriptRow: View {
+private struct TranscriptRow: View {
     let entry: TranscriptEntry
     let onDelete: () -> Void
 
     @State private var showsRawText = false
+    @State private var isHovering = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            // Timestamp column
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            // Timestamp — fixed width column
             Text(entry.date, format: .dateTime.hour().minute())
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 55, alignment: .trailing)
-                .padding(.top, 2)
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+                .frame(width: 52, alignment: .trailing)
 
-            // Transcript text
-            Text(displayText)
-                .font(.body)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(nil)
+            // Transcript content
+            VStack(alignment: .leading, spacing: 4) {
+                Text(displayText)
+                    .font(.body)
+                    .lineSpacing(3)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if showsRawText {
+                    Text("Showing raw transcript")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+            }
         }
-        .contextMenu {
-            Button {
-                showsRawText.toggle()
-            } label: {
-                Label(
-                    showsRawText ? "Show AI edit" : "Undo AI edit",
-                    systemImage: showsRawText ? "sparkles" : "arrow.uturn.backward"
-                )
-            }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
+        .contentShape(Rectangle())
+        .background(isHovering ? Color.primary.opacity(0.03) : Color.clear)
+        .onHover { isHovering = $0 }
+        .contextMenu { contextMenuContent }
+    }
 
-            Button {
-                copyText()
-            } label: {
-                Label("Copy transcript", systemImage: "doc.on.doc")
-            }
+    @ViewBuilder
+    private var contextMenuContent: some View {
+        Button {
+            showsRawText.toggle()
+        } label: {
+            Label(
+                showsRawText ? "Show AI edit" : "Undo AI edit",
+                systemImage: showsRawText ? "sparkles" : "arrow.uturn.backward"
+            )
+        }
 
-            Divider()
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(displayText, forType: .string)
+        } label: {
+            Label("Copy transcript", systemImage: "doc.on.doc")
+        }
 
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Delete transcript", systemImage: "trash")
-            }
+        Divider()
+
+        Button(role: .destructive, action: onDelete) {
+            Label("Delete transcript", systemImage: "trash")
         }
     }
 
     private var displayText: String {
         let text = showsRawText ? entry.raw : entry.cleaned
         return text.isEmpty ? entry.raw : text
-    }
-
-    private func copyText() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(displayText, forType: .string)
     }
 }
