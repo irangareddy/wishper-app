@@ -1,67 +1,29 @@
-@preconcurrency import ApplicationServices
 import Carbon
 import Cocoa
 import Foundation
 import OSLog
 
-// MARK: - Accessibility Permission Manager
-
-nonisolated final class AccessibilityPermissionManager {
-    var onPermissionChange: (() -> Void)?
-
-    private var observer: Any?
-
-    static func isGranted() -> Bool {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false] as NSDictionary
-        return AXIsProcessTrustedWithOptions(options)
-    }
-
-    static func requestPermission() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as NSDictionary
-        AXIsProcessTrustedWithOptions(options)
-    }
-
-    init() {
-        self.observer = NotificationCenter.default.addObserver(
-            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.onPermissionChange?()
-        }
-    }
-
-    deinit {
-        if let obs = observer { NotificationCenter.default.removeObserver(obs) }
-    }
-}
-
-// MARK: - Modifier Key Detector
-
 /// Detects modifier-only key press/release (fn, Right Command, etc.) and Esc.
-/// Uses CGEventTap (.defaultTap) with NSEvent conversion.
-/// Supports configurable PTT key and cancel key.
-nonisolated final class ModifierKeyDetector: @unchecked Sendable {
-    private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "in.irangareddy.Wishper-App",
-        category: "hotkeys"
-    )
+/// Uses CGEventTap (.listenOnly) on the main run loop.
+/// Includes a watchdog timer that re-enables the tap if macOS disables it.
+@MainActor
+final class ModifierKeyDetector {
+    private let logger = WishperLog.voicePipeline
 
-    // Callbacks
-    var onPttDown: (() -> Void)?
-    var onPttUp: (() -> Void)?
-    var onCancel: (() -> Void)?
+    nonisolated(unsafe) var onPttDown: (() -> Void)?
+    nonisolated(unsafe) var onPttUp: (() -> Void)?
+    nonisolated(unsafe) var onCancel: (() -> Void)?
 
     // Configurable keys
-    var pttKeyCode: UInt16 = 63           // fn
-    var pttModifierFlag: NSEvent.ModifierFlags = .function
-    var cancelKeyCode: UInt16 = 53        // Esc
-    var cancelUsesCmdPeriod = false        // ⌘. mode
+    nonisolated(unsafe) var pttKeyCode: UInt16 = 63
+    nonisolated(unsafe) var pttModifierFlag: NSEvent.ModifierFlags = .function
+    nonisolated(unsafe) var cancelKeyCode: UInt16 = 53
+    nonisolated(unsafe) var cancelUsesCmdPeriod = false
 
-    private var eventTap: CFMachPort?
-    private var isPttDown = false
-    private let permissionManager = AccessibilityPermissionManager()
-    private var watchdogTimer: Timer?
+    nonisolated(unsafe) private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+    nonisolated(unsafe) private var isPttDown = false
+    private var watchdogTask: Task<Void, Never>?
 
     /// Map key name strings to (keyCode, modifierFlag)
     static let keyMap: [String: (keyCode: UInt16, flag: NSEvent.ModifierFlags)] = [
@@ -79,14 +41,13 @@ nonisolated final class ModifierKeyDetector: @unchecked Sendable {
         }
 
         if cancelKey == "cmdPeriod" {
-            cancelKeyCode = 47 // kVK_ANSI_Period
+            cancelKeyCode = 47
             cancelUsesCmdPeriod = true
         } else if cancelKey == "fn" {
-            // fn as cancel — handled separately via flagsChanged
             cancelKeyCode = 63
             cancelUsesCmdPeriod = false
         } else {
-            cancelKeyCode = 53 // Esc
+            cancelKeyCode = 53
             cancelUsesCmdPeriod = false
         }
 
@@ -94,49 +55,22 @@ nonisolated final class ModifierKeyDetector: @unchecked Sendable {
     }
 
     func start() {
-        permissionManager.onPermissionChange = { [weak self] in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                guard let self else { return }
-                if AccessibilityPermissionManager.isGranted() {
-                    self.createTap()
-                } else {
-                    self.destroyTap()
-                }
-            }
+        let trusted = AXIsProcessTrusted()
+        logger.info("starting modifier detector, accessibility=\(trusted)")
+
+        if !trusted {
+            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+            AXIsProcessTrustedWithOptions(options)
         }
 
-        // Always try to create tap
         createTap()
-
-        // If tap failed, prompt for permission
-        if eventTap == nil {
-            logger.warning("tap failed — requesting accessibility permission")
-            AccessibilityPermissionManager.requestPermission()
-        }
-
-        // Watchdog: re-enable tap every 3s if macOS disabled it
-        watchdogTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            if let tap = self.eventTap {
-                if !CGEvent.tapIsEnabled(tap: tap) {
-                    CGEvent.tapEnable(tap: tap, enable: true)
-                    self.logger.info("watchdog re-enabled tap")
-                }
-            } else {
-                // Tap completely gone — recreate
-                self.createTap()
-                if self.eventTap != nil {
-                    self.logger.info("watchdog recreated tap")
-                }
-            }
-        }
+        startWatchdog()
     }
 
     func stop() {
-        watchdogTimer?.invalidate()
-        watchdogTimer = nil
+        watchdogTask?.cancel()
+        watchdogTask = nil
         destroyTap()
-        permissionManager.onPermissionChange = nil
     }
 
     // MARK: - Event Tap
@@ -144,80 +78,108 @@ nonisolated final class ModifierKeyDetector: @unchecked Sendable {
     private func createTap() {
         guard eventTap == nil else { return }
 
-        let eventMask = CGEventMask(
+        let mask: CGEventMask =
             (1 << CGEventType.flagsChanged.rawValue) |
             (1 << CGEventType.keyDown.rawValue)
-        )
-
-        let callback: CGEventTapCallBack = { (proxy, type, event, refcon) in
-            guard let refcon else { return Unmanaged.passUnretained(event) }
-            let detector = Unmanaged<ModifierKeyDetector>.fromOpaque(refcon).takeUnretainedValue()
-            return detector.handleEvent(type: type, event: event)
-        }
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .listenOnly,
-            eventsOfInterest: eventMask,
-            callback: callback,
+            eventsOfInterest: mask,
+            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
+                guard let refcon else { return Unmanaged.passRetained(event) }
+                let detector = Unmanaged<ModifierKeyDetector>.fromOpaque(refcon).takeUnretainedValue()
+                detector.handleEvent(type: type, event: event)
+                return Unmanaged.passUnretained(event)
+            },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            logger.error("failed to create event tap")
+            logger.error("event tap creation failed")
             return
         }
 
         self.eventTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
+        self.runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        if let source = runLoopSource {
+            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        }
         CGEvent.tapEnable(tap: tap, enable: true)
         logger.info("modifier key detector started")
     }
 
     private func destroyTap() {
-        guard let tap = eventTap else { return }
-        CGEvent.tapEnable(tap: tap, enable: false)
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+        }
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
         eventTap = nil
+        runLoopSource = nil
         isPttDown = false
+    }
+
+    // MARK: - Watchdog
+
+    private func startWatchdog() {
+        watchdogTask?.cancel()
+        watchdogTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                guard let self else { return }
+
+                if let tap = self.eventTap {
+                    if !CGEvent.tapIsEnabled(tap: tap) {
+                        CGEvent.tapEnable(tap: tap, enable: true)
+                        self.logger.info("watchdog re-enabled tap")
+                    }
+                } else {
+                    self.logger.info("watchdog recreating tap")
+                    self.createTap()
+                }
+            }
+        }
     }
 
     // MARK: - Event Handling
 
-    private func handleEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        // Re-enable if system disabled
+    nonisolated private func handleEvent(type: CGEventType, event: CGEvent) {
+        // Re-enable tap if system disabled it
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
-            return Unmanaged.passUnretained(event)
+            return
         }
 
-        guard let nsEvent = NSEvent(cgEvent: event) else {
-            return Unmanaged.passUnretained(event)
-        }
+        let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
 
-        // Cancel: Esc key or ⌘.
-        if nsEvent.type == .keyDown {
+        // Cancel: Esc or ⌘.
+        if type == .keyDown {
             if cancelUsesCmdPeriod {
-                if nsEvent.keyCode == 47 && nsEvent.modifierFlags.contains(.command) {
+                let flags = NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue))
+                if keyCode == cancelKeyCode && flags.contains(.command) {
                     onCancel?()
-                    return Unmanaged.passUnretained(event)
+                    return
                 }
-            } else if nsEvent.keyCode == cancelKeyCode {
+            } else if keyCode == cancelKeyCode {
                 onCancel?()
-                return Unmanaged.passUnretained(event)
+                return
             }
         }
 
         // PTT modifier key (flagsChanged)
-        guard nsEvent.type == .flagsChanged, nsEvent.keyCode == pttKeyCode else {
-            return Unmanaged.passUnretained(event)
-        }
+        guard type == .flagsChanged, keyCode == pttKeyCode else { return }
 
-        let pressed = nsEvent.modifierFlags.contains(pttModifierFlag)
-        guard pressed != isPttDown else {
-            return Unmanaged.passUnretained(event)
-        }
+        let pressed = event.flags.contains(CGEventFlags(rawValue: UInt64(pttModifierFlag.rawValue)))
+            || (pttKeyCode == 63 && event.flags.contains(.maskSecondaryFn))
+            || (pttKeyCode == 54 && event.flags.contains(.maskCommand))
+            || (pttKeyCode == 61 && event.flags.contains(.maskAlternate))
+            || (pttKeyCode == 62 && event.flags.contains(.maskControl))
+            || (pttKeyCode == 60 && event.flags.contains(.maskShift))
+
+        guard pressed != isPttDown else { return }
         isPttDown = pressed
 
         if pressed {
@@ -225,7 +187,5 @@ nonisolated final class ModifierKeyDetector: @unchecked Sendable {
         } else {
             onPttUp?()
         }
-
-        return Unmanaged.passUnretained(event)
     }
 }
