@@ -273,8 +273,10 @@ private struct OverlayContent: View {
         case .idle:
             EmptyView()
         case .readyPrompt:
-            ReadyPromptChip(prompt: model.prompt)
-                .transition(.opacity)
+            if let prompt = model.prompt {
+                PromptBubble(prompt: prompt)
+                    .allowsHitTesting(false)
+            }
         case .recording:
             RecordingChip(
                 levels: model.levels,
@@ -297,38 +299,20 @@ private struct OverlayContent: View {
         }
     }
 
+    private var activePrompt: RecordingOverlayPrompt? {
+        switch hoverTarget {
+        case .idle:   RecordingOverlayPrompt(prefix: "Hold ", hotkey: model.hotkeyLabel, suffix: " to dictate")
+        case .cancel: RecordingOverlayPrompt(prefix: "", hotkey: "Cancel", suffix: " recording")
+        case .stop:   RecordingOverlayPrompt(prefix: "", hotkey: "Done", suffix: " — transcribe & paste")
+        case nil:     nil
+        }
+    }
+
     @ViewBuilder
     private var hoverHint: some View {
-        switch hoverTarget {
-        case .idle:
-            Button(action: onTap) {
-                HStack(spacing: 6) {
-                    Text("Start recording")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.85))
-                    Text(model.hotkeyLabel)
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.5))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
-                }
-                .padding(.horizontal, 12)
-                .frame(height: ChipLayout.chipHeight)
-                .background(ChipBackground())
-                .shadow(color: .black.opacity(0.14), radius: 6, y: 3)
-            }
-            .buttonStyle(.plain)
-        case .cancel:
-            Text("Cancel")
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.7))
-        case .stop:
-            Text("Done")
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(.red.opacity(0.9))
-        case nil:
-            EmptyView()
+        if let prompt = activePrompt {
+            PromptBubble(prompt: prompt)
+                .allowsHitTesting(false)
         }
     }
 }
@@ -375,32 +359,6 @@ private struct IdleChip: View {
                     isHovering = hovering
                 }
             }
-    }
-}
-
-// MARK: - Ready Prompt Chip
-
-private struct ReadyPromptChip: View {
-    let prompt: RecordingOverlayPrompt?
-
-    var body: some View {
-        Group {
-            if let prompt {
-                HStack(spacing: 0) {
-                    Text(prompt.prefix)
-                        .foregroundStyle(.white.opacity(0.75))
-                    Text(prompt.hotkey)
-                        .foregroundStyle(Color(red: 0.92, green: 0.50, blue: 0.84))
-                    Text(prompt.suffix)
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .lineLimit(1)
-            }
-        }
-        .frame(width: ChipLayout.chipWidth, height: ChipLayout.chipHeight)
-        .background(ChipBackground())
-        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
     }
 }
 
@@ -483,35 +441,25 @@ private struct CancelledChip: View {
     let onUndo: () -> Void
     @State private var progress: CGFloat = 1.0
 
+    private let prompt = RecordingOverlayPrompt(
+        prefix: "Cancelled ", hotkey: "Undo", suffix: ""
+    )
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text("Transcript cancelled")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.7))
-
-                Button(action: onUndo) {
-                    Text("Undo")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color(red: 0.92, green: 0.50, blue: 0.84))
-                }
-                .buttonStyle(.plain)
+        VStack(spacing: 4) {
+            Button(action: onUndo) {
+                PromptBubble(prompt: prompt)
             }
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .buttonStyle(.plain)
 
+            // Progress countdown bar
             GeometryReader { geo in
                 Capsule()
                     .fill(Color.white.opacity(0.2))
                     .frame(width: geo.size.width * progress, height: 2)
             }
-            .frame(height: 2)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 6)
+            .frame(width: ChipLayout.chipWidth, height: 2)
         }
-        .padding(.horizontal, 4)
-        .background(ChipBackground())
-        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
         .onAppear {
             withAnimation(.easeIn(duration: 3.0)) {
                 progress = 0.0
@@ -591,7 +539,7 @@ private struct SlowActivityBars: View {
     }
 }
 
-// MARK: - Legacy PromptBubble (kept for readyPrompt state)
+// MARK: - Prompt Bubble (single hint component for all suggestions)
 
 private struct PromptBubble: View {
     let prompt: RecordingOverlayPrompt
@@ -663,11 +611,9 @@ private struct PromptBubble: View {
         .background(Color(white: 0.15))
 }
 
-#Preview("Ready Prompt") {
-    ReadyPromptChip(prompt: RecordingOverlayPrompt(
-        prefix: "Tap mic or hold ",
-        hotkey: "Right Command",
-        suffix: " to dictate"
+#Preview("Prompt Bubble") {
+    PromptBubble(prompt: RecordingOverlayPrompt(
+        prefix: "Hold ", hotkey: "Right Command", suffix: " to dictate"
     ))
     .padding(40)
     .background(Color(white: 0.15))
