@@ -27,8 +27,12 @@ final class AppState: ObservableObject {
     @Published var selectedLLMModel = "mlx-community/Qwen3-0.6B-4bit"
     @Published var cleanupEnabled = false
     @Published var transcriptionLanguage = "en"
-    @Published var pushToTalkKey = "fn"
-    @Published var cancelKey = "esc"
+    @Published var pushToTalkKey: String {
+        didSet { UserDefaults.standard.set(pushToTalkKey, forKey: "pushToTalkKey") }
+    }
+    @Published var cancelKey: String {
+        didSet { UserDefaults.standard.set(cancelKey, forKey: "cancelKey") }
+    }
     @Published var handsFreeConfig = HotkeyConfiguration.fnSpace
     @Published var soundsEnabled = true
     @Published var chipPosition: ChipPosition = .belowNotch
@@ -50,6 +54,9 @@ final class AppState: ObservableObject {
     }()
 
     init() {
+        let ud = UserDefaults.standard
+        self.pushToTalkKey = ud.string(forKey: "pushToTalkKey") ?? "fn"
+        self.cancelKey = ud.string(forKey: "cancelKey") ?? "esc"
         loadHistory()
     }
 
