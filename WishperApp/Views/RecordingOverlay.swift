@@ -338,7 +338,7 @@ private struct RecordingChip: View {
         HStack(spacing: 0) {
             Button(action: onCancel) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
+                    .font(.system(size: 18))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.white.opacity(0.55))
                     .frame(width: 30, height: ChipLayout.height)
@@ -351,7 +351,7 @@ private struct RecordingChip: View {
 
             Button(action: onStop) {
                 Image(systemName: "stop.circle.fill")
-                    .font(.system(size: 14))
+                    .font(.system(size: 18))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.white.opacity(0.75))
                     .frame(width: 30, height: ChipLayout.height)
