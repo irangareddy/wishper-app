@@ -30,9 +30,14 @@ struct RecordingOverlayPrompt: Equatable {
 // MARK: - Constants
 
 private enum ChipLayout {
-    static let width: CGFloat = 120 
-    static let height: CGFloat = 36    // doubled area, components stay same size
+    // Chip dimensions (the visible pill)
+    static let chipWidth: CGFloat = 130
+    static let chipHeight: CGFloat = 36
     static let cornerRadius: CGFloat = 18
+
+    // Overlay window dimensions (fixed, transparent, never resizes)
+    static let windowWidth: CGFloat = 280
+    static let windowHeight: CGFloat = 140
 }
 
 // MARK: - Model
@@ -44,6 +49,7 @@ final class RecordingOverlayModel: ObservableObject {
     @Published var levels: [CGFloat] = Array(repeating: 0.08, count: 11)
     @Published var prompt: RecordingOverlayPrompt?
     @Published var chipPosition: ChipPosition = .belowNotch
+    @Published var hotkeyLabel: String = "Right Command"
 }
 
 // MARK: - Controller
@@ -65,7 +71,7 @@ final class RecordingOverlayController {
 
         // Fixed panel size — tall enough for bar + suggestion chip above
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: ChipLayout.width, height: ChipLayout.height + 44),
+            contentRect: NSRect(x: 0, y: 0, width: ChipLayout.windowWidth, height: ChipLayout.windowHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -147,6 +153,10 @@ final class RecordingOverlayController {
         positionPanel()
     }
 
+    func setHotkeyLabel(_ label: String) {
+        model.hotkeyLabel = label
+    }
+
     // MARK: - Private
 
     private func updateMouseInteraction() {
@@ -158,24 +168,24 @@ final class RecordingOverlayController {
         }
     }
 
-    private static let panelHeight: CGFloat = ChipLayout.height + 44
-
     private func positionPanel() {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? .zero
         let screenFrame = screen?.frame ?? .zero
-        let x = visibleFrame.midX - (ChipLayout.width / 2)
+        let w = ChipLayout.windowWidth
+        let h = ChipLayout.windowHeight
+        let x = visibleFrame.midX - (w / 2)
 
         let y: CGFloat
         switch model.chipPosition {
         case .belowNotch:
-            y = visibleFrame.maxY - Self.panelHeight - 4
+            y = visibleFrame.maxY - h - 2
         case .aboveDock:
             let dockHeight = screenFrame.height - visibleFrame.height - (screenFrame.height - visibleFrame.maxY)
-            y = visibleFrame.minY + max(dockHeight, 12) + 8
+            y = visibleFrame.minY + max(dockHeight, 12) + 4
         }
 
-        panel.setFrame(NSRect(x: x, y: y, width: ChipLayout.width, height: Self.panelHeight), display: true)
+        panel.setFrame(NSRect(x: x, y: y, width: w, height: h), display: true)
     }
 
     private func normalizedLevels(from levels: [CGFloat]?, fallbackLevel: CGFloat) -> [CGFloat] {
@@ -199,37 +209,72 @@ private struct OverlayContent: View {
     var onCancel: () -> Void
     var onUndo: () -> Void
 
-    var body: some View {
-        VStack(spacing: 4) {
-            // Active chip states appear ABOVE the idle bar
-            switch model.state {
-            case .idle:
-                EmptyView()
-                    .transition(.opacity)
-            case .readyPrompt:
-                ReadyPromptChip(prompt: model.prompt)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            case .recording:
-                RecordingChip(levels: model.levels, onCancel: onCancel, onStop: onStop, reduceMotion: reduceMotion)
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
-            case .transcribing, .cleaning:
-                ProcessingChip(reduceMotion: reduceMotion)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            case .done:
-                DoneChip()
-                    .transition(.opacity.animation(.easeOut(duration: 0.4)))
-            case .cancelled:
-                CancelledChip(onUndo: onUndo)
-                    .transition(.scale(scale: 0.95).combined(with: .opacity))
-            }
+    @State private var hoverTarget: HoverTarget?
+    private enum HoverTarget { case cancel, stop }
 
-            // Idle bar — only visible when idle
-            if model.state == .idle {
-                IdleChip(onTap: onTap)
+    private var isTopPosition: Bool { model.chipPosition == .belowNotch }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            if isTopPosition {
+                Spacer(minLength: 0)
+                hoverHint
+                activeChip
+                if model.state == .idle {
+                    IdleChip(onTap: onTap, hotkeyLabel: model.hotkeyLabel, growsDown: true)
+                }
+            } else {
+                if model.state == .idle {
+                    IdleChip(onTap: onTap, hotkeyLabel: model.hotkeyLabel, growsDown: false)
+                }
+                activeChip
+                hoverHint
+                Spacer(minLength: 0)
             }
         }
-        .frame(width: ChipLayout.width)
+        .frame(width: ChipLayout.windowWidth, height: ChipLayout.windowHeight)
         .animation(reduceMotion ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: model.state)
+        .animation(.easeOut(duration: 0.12), value: hoverTarget)
+    }
+
+    @ViewBuilder
+    private var activeChip: some View {
+        switch model.state {
+        case .idle:
+            EmptyView()
+        case .readyPrompt:
+            ReadyPromptChip(prompt: model.prompt)
+                .transition(.opacity)
+        case .recording:
+            RecordingChip(
+                levels: model.levels,
+                onCancel: onCancel,
+                onStop: onStop,
+                reduceMotion: reduceMotion,
+                onCancelHover: { h in hoverTarget = h ? .cancel : nil },
+                onStopHover: { h in hoverTarget = h ? .stop : nil }
+            )
+            .transition(.scale(scale: 0.9).combined(with: .opacity))
+        case .transcribing, .cleaning:
+            ProcessingChip(reduceMotion: reduceMotion)
+                .transition(.opacity)
+        case .done:
+            DoneChip()
+                .transition(.opacity.animation(.easeOut(duration: 0.4)))
+        case .cancelled:
+            CancelledChip(onUndo: onUndo)
+                .transition(.scale(scale: 0.95).combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder
+    private var hoverHint: some View {
+        if let target = hoverTarget {
+            Text(target == .cancel ? "Cancel" : "Done")
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(target == .cancel ? .white.opacity(0.7) : .red.opacity(0.9))
+                .transition(.opacity)
+        }
     }
 }
 
@@ -259,39 +304,52 @@ private struct ChipBackground: View {
 
 private struct IdleChip: View {
     let onTap: () -> Void
+    var hotkeyLabel: String = "Right Command"
+    var growsDown: Bool = true
     @State private var isHovering = false
+
+    private var hoverChip: some View {
+        Button(action: onTap) {
+            HStack(spacing: 6) {
+                Text("Start recording")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.85))
+
+                Text(hotkeyLabel)
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
+            }
+            .padding(.horizontal, 12)
+            .frame(height: ChipLayout.chipHeight)
+            .background(ChipBackground())
+            .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
+        .transition(.move(edge: growsDown ? .top : .bottom).combined(with: .opacity))
+    }
+
+    private var idleBar: some View {
+        Capsule()
+            .strokeBorder(Color.white.opacity(isHovering ? 0.5 : 0.35), lineWidth: 1)
+            .frame(width: 36, height: 8)
+            .contentShape(Rectangle().size(width: 120, height: 20).offset(x: -42, y: -6))
+            .onTapGesture { onTap() }
+    }
 
     var body: some View {
         VStack(spacing: 4) {
-            // Hover suggestion appears ABOVE the bar on Y axis
-            if isHovering {
-                Button(action: onTap) {
-                    HStack(spacing: 6) {
-                        Text("Start recording")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.85))
-
-                        Text("Fn")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
-                    }
-                    .frame(width: ChipLayout.width, height: ChipLayout.height)
-                    .background(ChipBackground())
-                    .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
-                }
-                .buttonStyle(.plain)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+            if growsDown {
+                // Top position: bar first, hover chip below
+                idleBar
+                if isHovering { hoverChip }
+            } else {
+                // Bottom position: hover chip above, bar below
+                if isHovering { hoverChip }
+                idleBar
             }
-
-            // Thin pill bar — always visible at the bottom
-            Capsule()
-                .strokeBorder(Color.white.opacity(isHovering ? 0.5 : 0.35), lineWidth: 1)
-                .frame(width: 36, height: 8)
-                .contentShape(Rectangle().size(width: ChipLayout.width, height: 20).offset(x: -67, y: -6))
-                .onTapGesture { onTap() }
         }
         .onHover { hovering in
             withAnimation(.snappy(duration: 0.2)) {
@@ -321,7 +379,7 @@ private struct ReadyPromptChip: View {
                 .lineLimit(1)
             }
         }
-        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .frame(width: ChipLayout.chipWidth, height: ChipLayout.chipHeight)
         .background(ChipBackground())
         .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
     }
@@ -334,6 +392,8 @@ private struct RecordingChip: View {
     let onCancel: () -> Void
     let onStop: () -> Void
     var reduceMotion: Bool = false
+    var onCancelHover: (Bool) -> Void = { _ in }
+    var onStopHover: (Bool) -> Void = { _ in }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -342,10 +402,11 @@ private struct RecordingChip: View {
                     .font(.system(size: 18))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.white.opacity(0.55))
-                    .frame(width: 30, height: ChipLayout.height)
+                    .frame(width: 30, height: ChipLayout.chipHeight)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { onCancelHover($0) }
 
             RecordingLevelBars(levels: levels, reduceMotion: reduceMotion)
                 .frame(maxWidth: .infinity)
@@ -355,12 +416,13 @@ private struct RecordingChip: View {
                     .font(.system(size: 18))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.red)
-                    .frame(width: 30, height: ChipLayout.height)
+                    .frame(width: 30, height: ChipLayout.chipHeight)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { onStopHover($0) }
         }
-        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .frame(width: ChipLayout.chipWidth, height: ChipLayout.chipHeight)
         .background(ChipBackground())
         .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
     }
@@ -373,7 +435,7 @@ private struct ProcessingChip: View {
 
     var body: some View {
         SlowActivityBars(baseHeights: [4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4], reduceMotion: reduceMotion)
-            .frame(width: ChipLayout.width, height: ChipLayout.height)
+            .frame(width: ChipLayout.chipWidth, height: ChipLayout.chipHeight)
             .background(ChipBackground())
             .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
     }
@@ -390,7 +452,7 @@ private struct DoneChip: View {
                     .frame(width: 2, height: 2)
             }
         }
-        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .frame(width: ChipLayout.chipWidth, height: ChipLayout.chipHeight)
         .background(ChipBackground())
         .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
     }
@@ -416,7 +478,8 @@ private struct CancelledChip: View {
                 }
                 .buttonStyle(.plain)
             }
-            .frame(height: ChipLayout.height - 4)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
 
             GeometryReader { geo in
                 Capsule()
@@ -424,10 +487,10 @@ private struct CancelledChip: View {
                     .frame(width: geo.size.width * progress, height: 2)
             }
             .frame(height: 2)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 2)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 6)
         }
-        .frame(width: ChipLayout.width, height: ChipLayout.height)
+        .padding(.horizontal, 4)
         .background(ChipBackground())
         .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
         .onAppear {

@@ -125,6 +125,7 @@ final class PipelineCoordinator {
 
         // Set chip position and show idle
         overlay.setPosition(appState.chipPosition)
+        overlay.setHotkeyLabel(appState.hotkeyConfig.displayString)
         startHotkeys()
     }
 
