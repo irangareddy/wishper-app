@@ -329,8 +329,8 @@ private struct ChipBackground: View {
             .fill(
                 LinearGradient(
                     colors: [
-                        Color(red: 0.12, green: 0.10, blue: 0.18).opacity(0.94),
-                        Color(red: 0.06, green: 0.05, blue: 0.10).opacity(0.92)
+                        Color(white: 0.10).opacity(0.94),
+                        Color(white: 0.05).opacity(0.92)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -338,7 +338,7 @@ private struct ChipBackground: View {
             )
             .overlay {
                 Capsule()
-                    .strokeBorder(Color(red: 0.75, green: 0.45, blue: 1.0).opacity(0.15), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
             }
     }
 }
@@ -354,7 +354,7 @@ private struct IdleChip: View {
     var body: some View {
         // Just the bar — the hover suggestion comes from suggestionsArea in OverlayContent
         Capsule()
-            .strokeBorder(Color(red: 0.75, green: 0.45, blue: 1.0).opacity(isHovering ? 0.6 : 0.35), lineWidth: 1)
+            .strokeBorder(Color.white.opacity(isHovering ? 0.5 : 0.3), lineWidth: 1)
             .frame(width: 36, height: 8)
             .contentShape(Rectangle().size(width: 120, height: 24).offset(x: -42, y: -8))
             .onTapGesture { onTap() }
@@ -564,8 +564,8 @@ private struct PromptBubble: View {
         .background(
             LinearGradient(
                 colors: [
-                    Color(red: 0.12, green: 0.10, blue: 0.18).opacity(0.94),
-                    Color(red: 0.06, green: 0.05, blue: 0.10).opacity(0.92)
+                    Color(white: 0.10).opacity(0.94),
+                    Color(white: 0.05).opacity(0.92)
                 ],
                 startPoint: .top, endPoint: .bottom
             ),
