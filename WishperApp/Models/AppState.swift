@@ -60,6 +60,11 @@ final class AppState: ObservableObject {
         saveHistory()
     }
 
+    func deleteFromHistory(id: UUID) {
+        history.removeAll { $0.id == id }
+        saveHistory()
+    }
+
     private func loadHistory() {
         guard let data = try? Data(contentsOf: Self.historyFileURL),
               let entries = try? JSONDecoder().decode([TranscriptEntry].self, from: data)

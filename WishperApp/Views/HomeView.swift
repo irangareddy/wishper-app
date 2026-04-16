@@ -2,7 +2,6 @@ import AppKit
 import Combine
 import SwiftUI
 
-
 struct HomeView: View {
     @ObservedObject var appState: AppState
 
@@ -15,21 +14,25 @@ struct HomeView: View {
                 ContentUnavailableView(
                     "No Transcripts Yet",
                     systemImage: "waveform",
-                    description: Text("Start dictating from the menu bar and your transcript history will appear here.")
+                    description: Text("Start dictating and your transcript history will appear here.")
                 )
                 Spacer()
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(appState.history) { entry in
-                            TranscriptRow(entry: entry)
-                        }
+                List {
+                    ForEach(appState.history) { entry in
+                        TranscriptRow(
+                            entry: entry,
+                            onDelete: { appState.deleteFromHistory(id: entry.id) }
+                        )
+                        .listRowSeparator(.visible)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
                     }
-                    .padding(.bottom, 24)
                 }
+                .listStyle(.plain)
             }
         }
-        .padding(24)
+        .padding(.top, 24)
+        .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
     }
@@ -100,56 +103,63 @@ func formatNumber(_ n: Int) -> String {
     return "\(n)"
 }
 
+// MARK: - Transcript Row
+
 struct TranscriptRow: View {
     let entry: TranscriptEntry
+    let onDelete: () -> Void
 
     @State private var showsRawText = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.date, format: .dateTime.month(.abbreviated).day().hour().minute())
-                        .font(.headline)
+        HStack(alignment: .top, spacing: 16) {
+            // Timestamp column
+            Text(entry.date, format: .dateTime.hour().minute())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 55, alignment: .trailing)
+                .padding(.top, 2)
 
-                    Text(showsRawText ? "Raw transcript" : "Cleaned transcript")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Menu {
-                    Button("Copy \(showsRawText ? "Raw" : "Cleaned") Text") {
-                        copyCurrentText()
-                    }
-
-                    Button(showsRawText ? "Show Cleaned Text" : "Show Raw Text") {
-                        showsRawText.toggle()
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.title3)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-            }
-
+            // Transcript text
             Text(displayText)
+                .font(.body)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(nil)
         }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .contextMenu {
+            Button {
+                showsRawText.toggle()
+            } label: {
+                Label(
+                    showsRawText ? "Show AI edit" : "Undo AI edit",
+                    systemImage: showsRawText ? "sparkles" : "arrow.uturn.backward"
+                )
+            }
+
+            Button {
+                copyText()
+            } label: {
+                Label("Copy transcript", systemImage: "doc.on.doc")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("Delete transcript", systemImage: "trash")
+            }
+        }
     }
 
     private var displayText: String {
-        showsRawText ? entry.raw : entry.cleaned
+        let text = showsRawText ? entry.raw : entry.cleaned
+        return text.isEmpty ? entry.raw : text
     }
 
-    private func copyCurrentText() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(displayText, forType: .string)
+    private func copyText() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(displayText, forType: .string)
     }
 }
