@@ -59,9 +59,9 @@ struct HotkeyConfiguration: Codable, Equatable, Hashable {
         keyChar: nil
     )
 
-    /// Fn + Space — default hands-free toggle
+    /// Control + Space — default hands-free
     static let fnSpace = HotkeyConfiguration(
-        modifierFlagsRawValue: NSEvent.ModifierFlags.function.rawValue,
+        modifierFlagsRawValue: NSEvent.ModifierFlags.control.rawValue,
         keyCode: 49,  // kVK_Space
         keyChar: "Space"
     )
