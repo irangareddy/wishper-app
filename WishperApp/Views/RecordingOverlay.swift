@@ -338,7 +338,7 @@ private struct ChipBackground: View {
             )
             .overlay {
                 Capsule()
-                    .strokeBorder(Color(red: 0.65, green: 0.55, blue: 0.95).opacity(0.15), lineWidth: 1)
+                    .strokeBorder(Color(red: 0.75, green: 0.45, blue: 1.0).opacity(0.15), lineWidth: 1)
             }
     }
 }
@@ -354,7 +354,7 @@ private struct IdleChip: View {
     var body: some View {
         // Just the bar — the hover suggestion comes from suggestionsArea in OverlayContent
         Capsule()
-            .strokeBorder(Color(red: 0.65, green: 0.55, blue: 0.95).opacity(isHovering ? 0.6 : 0.35), lineWidth: 1)
+            .strokeBorder(Color(red: 0.75, green: 0.45, blue: 1.0).opacity(isHovering ? 0.6 : 0.35), lineWidth: 1)
             .frame(width: 36, height: 8)
             .contentShape(Rectangle().size(width: 120, height: 24).offset(x: -42, y: -8))
             .onTapGesture { onTap() }
@@ -553,7 +553,7 @@ private struct PromptBubble: View {
             Text(prompt.prefix)
                 .foregroundStyle(Color.white.opacity(0.96))
             Text(prompt.hotkey)
-                .foregroundStyle(Color(red: 0.65, green: 0.55, blue: 0.95))
+                .foregroundStyle(Color(red: 0.75, green: 0.45, blue: 1.0))
             Text(prompt.suffix)
                 .foregroundStyle(Color.white.opacity(0.96))
         }

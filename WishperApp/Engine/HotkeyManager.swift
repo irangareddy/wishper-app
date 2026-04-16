@@ -104,9 +104,12 @@ nonisolated final class ModifierKeyDetector: @unchecked Sendable {
             }
         }
 
-        if AccessibilityPermissionManager.isGranted() {
-            createTap()
-        } else {
+        // Always try to create tap — may work before isGranted reports true
+        createTap()
+
+        // If tap failed, prompt for permission
+        if eventTap == nil {
+            logger.warning("tap failed — requesting accessibility permission")
             AccessibilityPermissionManager.requestPermission()
         }
     }
