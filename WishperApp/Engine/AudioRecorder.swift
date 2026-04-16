@@ -18,7 +18,7 @@ final class AudioRecorder {
     private let waveformFloor: Float = 0.06
 
     /// Maximum recording duration in seconds before the buffer starts trimming oldest samples.
-    static let defaultMaxRecordingDuration: TimeInterval = 300 // 5 minutes
+    nonisolated static let defaultMaxRecordingDuration: TimeInterval = 300 // 5 minutes
     private let maxBufferSamples: Int
 
     /// Called with each batch of resampled audio samples (for streaming transcription).

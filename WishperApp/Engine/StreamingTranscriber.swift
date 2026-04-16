@@ -12,7 +12,7 @@ import SpeechVAD
 /// ASR model for transcription. By the time the user stops recording,
 /// most audio is already transcribed.
 actor StreamingTranscriber {
-    private let logger = WishperLog.voicePipeline
+    private nonisolated let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "in.irangareddy.Wishper-App", category: "voicePipeline")
     private var asrModel: Qwen3ASRModel?
     private var vadModel: SileroVADModel?
     private let modelId: String
@@ -83,7 +83,6 @@ actor StreamingTranscriber {
     func feedAudio(_ samples: [Float]) {
         guard let vadProcessor, let asrModel else { return }
 
-        let bufferStart = audioBuffer.count
         audioBuffer.append(contentsOf: samples)
 
         let events = vadProcessor.process(samples: samples)
