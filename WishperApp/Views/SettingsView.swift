@@ -1,12 +1,13 @@
 import ServiceManagement
 import SwiftUI
 
-// MARK: - Settings Detail View (single scroll, Gemini-style)
+// MARK: - Settings
 
 struct SettingsDetailView: View {
     @ObservedObject var appState: AppState
     @AppStorage("launchAtLoginEnabled") private var launchAtLoginEnabled = false
     @State private var launchAtLoginError: String?
+    @State private var showAdvanced = false
 
     var body: some View {
         ScrollView {
@@ -24,8 +25,9 @@ struct SettingsDetailView: View {
                 .padding(.top, 24)
                 .padding(.bottom, 20)
 
-                // Sections
-                settingsSection("Transcription", description: "Configure speech recognition language and text cleanup.") {
+                // ── General (consumer-facing) ──
+
+                settingsSection("Transcription") {
                     pickerRow("Language", selection: $appState.transcriptionLanguage) {
                         Text("English").tag("en")
                         Text("Chinese").tag("zh")
@@ -37,57 +39,23 @@ struct SettingsDetailView: View {
                         Divider()
                         Text("Auto-detect").tag("")
                     }
-                    toggleRow("Clean up with LLM", isOn: $appState.cleanupEnabled)
+                    toggleRow("LLM text cleanup", isOn: $appState.cleanupEnabled)
                 }
 
-                settingsSection("Shortcuts", description: "Keyboard shortcuts for recording and pasting.") {
-                    labeledRow("Push to talk") {
-                        ShortcutRecorderView(configuration: $appState.hotkeyConfig)
-                    }
-                    pickerRow("Hands-free mode", selection: handsFreeBinding) {
-                        Text("Fn + Space").tag(HotkeyConfiguration.fnSpace)
-                        Text("Shift + Cmd + Space").tag(HotkeyConfiguration.shiftCommandSpace)
-                    }
-                    labeledRow("Paste last transcript") {
-                        Text("⌃ ⌘ V")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .fontDesign(.rounded)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
-                    }
+                settingsSection("Shortcuts") {
+                    shortcutRow("Push to talk", config: appState.hotkeyConfig)
+                    shortcutRow("Hands-free", config: appState.handsFreeConfig)
+                    shortcutRow("Paste last", symbol: "⌃⌘V")
+                    shortcutRow("Cancel", symbol: "⎋")
                 }
 
                 settingsSection("Appearance") {
                     pickerRow("Chip position", selection: chipPositionBinding) {
-                        ForEach(ChipPosition.allCases) { position in
-                            Text(position.rawValue).tag(position)
+                        ForEach(ChipPosition.allCases) { p in
+                            Text(p.rawValue).tag(p)
                         }
                     }
-                    toggleRow("Play sounds", isOn: $appState.soundsEnabled)
-                }
-
-                settingsSection("Models", description: "On-device ML models for speech recognition and text cleanup.") {
-                    pickerRow("ASR model", selection: $appState.selectedASRModel) {
-                        Text("Qwen3-ASR 0.6B").tag("aufklarer/Qwen3-ASR-0.6B-MLX-4bit")
-                        Text("Whisper Tiny").tag("mlx-community/whisper-tiny")
-                        Text("Whisper Large v3 Turbo").tag("mlx-community/whisper-large-v3-turbo")
-                    }
-                    pickerRow("LLM model", selection: $appState.selectedLLMModel) {
-                        Text("Qwen3 0.6B 4-bit").tag("mlx-community/Qwen3-0.6B-4bit")
-                        Text("Qwen3 1.7B 4-bit").tag("mlx-community/Qwen3-1.7B-4bit")
-                        Text("Gemma 3 1B 4-bit").tag("mlx-community/gemma-3-1b-it-qat-4bit")
-                        Text("Llama 3.2 1B 4-bit").tag("mlx-community/Llama-3.2-1B-Instruct-4bit")
-                    }
-                    labeledRow("Estimated latency") {
-                        Text(performanceEstimate)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                settingsSection("System") {
+                    toggleRow("Sounds", isOn: $appState.soundsEnabled)
                     toggleRow("Launch at login", isOn: launchAtLoginBinding)
                     if let launchAtLoginError {
                         Text(launchAtLoginError)
@@ -97,45 +65,105 @@ struct SettingsDetailView: View {
                     }
                 }
 
-                if let monitor = appState.memoryMonitor {
-                    settingsSection("Memory", description: "Runtime memory and model cache diagnostics.") {
-                        labeledRow("Process resident") {
-                            Text("\(monitor.currentResidentMB) MB").monospacedDigit().foregroundStyle(.secondary)
+                // ── Advanced (tap to expand) ──
+
+                settingsSection("Advanced") {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { showAdvanced.toggle() }
+                    } label: {
+                        HStack {
+                            Text("Show advanced settings")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Image(systemName: showAdvanced ? "chevron.up" : "chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
                         }
-                        labeledRow("MLX active") {
-                            Text("\(monitor.mlxActiveMemoryMB) MB").monospacedDigit().foregroundStyle(.secondary)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if showAdvanced {
+                        Divider().padding(.horizontal, 24).padding(.vertical, 4)
+
+                        // Models
+                        modelRow("Speech model", selection: $appState.selectedASRModel, options: [
+                            ("Qwen3-ASR 0.6B", "aufklarer/Qwen3-ASR-0.6B-MLX-4bit", "Fast · 52 languages"),
+                            ("Whisper Tiny", "mlx-community/whisper-tiny", "Fastest · lower accuracy"),
+                            ("Whisper Large v3 Turbo", "mlx-community/whisper-large-v3-turbo", "Best accuracy · slower"),
+                        ])
+                        modelRow("Cleanup model", selection: $appState.selectedLLMModel, options: [
+                            ("Qwen3 0.6B", "mlx-community/Qwen3-0.6B-4bit", "Fast · good cleanup"),
+                            ("Qwen3 1.7B", "mlx-community/Qwen3-1.7B-4bit", "Better quality · slower"),
+                            ("Gemma 3 1B", "mlx-community/gemma-3-1b-it-qat-4bit", "Google · QAT"),
+                            ("Llama 3.2 1B", "mlx-community/Llama-3.2-1B-Instruct-4bit", "Meta"),
+                        ])
+                        labeledRow("Est. latency") {
+                            Text(performanceEstimate)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        labeledRow("MLX cache") {
-                            Text("\(monitor.mlxCacheMemoryMB) MB").monospacedDigit().foregroundStyle(.secondary)
+
+                        Divider().padding(.horizontal, 24).padding(.vertical, 4)
+
+                        // Shortcut customization
+                        labeledRow("Push to talk key") {
+                            ShortcutRecorderView(configuration: $appState.hotkeyConfig)
                         }
-                        labeledRow("Memory pressure") {
-                            Text(monitor.pressureLevel.displayString)
-                                .foregroundStyle(monitor.pressureLevel == .nominal ? .green : .orange)
+                        pickerRow("Hands-free key", selection: handsFreeBinding) {
+                            Text("fn Space").tag(HotkeyConfiguration.fnSpace)
+                            Text("⇧⌘ Space").tag(HotkeyConfiguration.shiftCommandSpace)
                         }
-                        labeledRow("ASR model") {
-                            Circle().fill(monitor.asrModelLoaded ? .green : .gray).frame(width: 8, height: 8)
-                            Text(monitor.asrModelLoaded ? "Loaded" : "Unloaded").foregroundStyle(.secondary)
-                        }
-                        labeledRow("LLM model") {
-                            Circle().fill(monitor.llmModelLoaded ? .green : .gray).frame(width: 8, height: 8)
-                            Text(monitor.llmModelLoaded ? "Loaded" : "Unloaded").foregroundStyle(.secondary)
+
+                        Divider().padding(.horizontal, 24).padding(.vertical, 4)
+
+                        // Memory diagnostics
+                        if let m = appState.memoryMonitor {
+                            labeledRow("Memory") {
+                                Text("\(m.currentResidentMB) MB")
+                                    .monospacedDigit().foregroundStyle(.secondary)
+                            }
+                            labeledRow("MLX active") {
+                                Text("\(m.mlxActiveMemoryMB) MB")
+                                    .monospacedDigit().foregroundStyle(.secondary)
+                            }
+                            labeledRow("Pressure") {
+                                Text(m.pressureLevel.displayString)
+                                    .foregroundStyle(m.pressureLevel == .nominal ? .green : .orange)
+                            }
+                            labeledRow("ASR") {
+                                Circle().fill(m.asrModelLoaded ? .green : .gray).frame(width: 7, height: 7)
+                                Text(m.asrModelLoaded ? "Loaded" : "—").font(.caption).foregroundStyle(.secondary)
+                            }
+                            labeledRow("LLM") {
+                                Circle().fill(m.llmModelLoaded ? .green : .gray).frame(width: 7, height: 7)
+                                Text(m.llmModelLoaded ? "Loaded" : "—").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
 
+                // ── About & Acknowledgments ──
+
                 settingsSection("About") {
                     labeledRow("Version") {
-                        Text("0.3.0").foregroundStyle(.secondary)
+                        Text("0.4.0").foregroundStyle(.secondary)
                     }
                     labeledRow("Engine") {
                         Text("MLX on Apple Silicon").foregroundStyle(.secondary)
                     }
                     labeledRow("Privacy") {
-                        Text("All processing on-device").foregroundStyle(.secondary)
+                        Text("100% on-device").foregroundStyle(.secondary)
                     }
-                    linkRow("GitHub", url: "https://github.com/irangareddy/wishper-app")
-                    linkRow("MLX Swift", url: "https://github.com/ml-explore/mlx-swift-lm")
-                    linkRow("speech-swift", url: "https://github.com/soniqo/speech-swift")
+                }
+
+                settingsSection("Acknowledgments", description: "Open-source libraries powering Wishper.") {
+                    acknowledgmentRow("MLX Swift", by: "Apple", url: "https://github.com/ml-explore/mlx-swift")
+                    acknowledgmentRow("mlx-swift-lm", by: "Apple", url: "https://github.com/ml-explore/mlx-swift-lm")
+                    acknowledgmentRow("speech-swift", by: "soniqo", url: "https://github.com/soniqo/speech-swift")
+                    acknowledgmentRow("swift-transformers", by: "Hugging Face", url: "https://github.com/huggingface/swift-transformers")
                 }
 
                 Spacer(minLength: 24)
@@ -152,7 +180,6 @@ struct SettingsDetailView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Section header
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.headline)
@@ -166,7 +193,6 @@ struct SettingsDetailView: View {
             .padding(.top, 20)
             .padding(.bottom, 10)
 
-            // Section rows
             content()
 
             Divider()
@@ -180,18 +206,16 @@ struct SettingsDetailView: View {
         HStack {
             Text(label)
             Spacer()
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .toggleStyle(.switch)
+            Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 6)
     }
 
-    private func pickerRow<SelectionValue: Hashable, Content: View>(
+    private func pickerRow<V: Hashable, C: View>(
         _ label: String,
-        selection: Binding<SelectionValue>,
-        @ViewBuilder content: () -> Content
+        selection: Binding<V>,
+        @ViewBuilder content: () -> C
     ) -> some View {
         HStack {
             Text(label)
@@ -204,7 +228,7 @@ struct SettingsDetailView: View {
         .padding(.vertical, 6)
     }
 
-    private func labeledRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+    private func labeledRow<C: View>(_ label: String, @ViewBuilder content: () -> C) -> some View {
         HStack {
             Text(label)
             Spacer()
@@ -214,22 +238,79 @@ struct SettingsDetailView: View {
         .padding(.vertical, 6)
     }
 
-    private func linkRow(_ label: String, url: String) -> some View {
+    /// Shortcut row — shows a keyboard symbol badge
+    private func shortcutRow(_ label: String, config: HotkeyConfiguration) -> some View {
+        shortcutRow(label, symbol: config.symbolString)
+    }
+
+    private func shortcutRow(_ label: String, symbol: String) -> some View {
         HStack {
             Text(label)
             Spacer()
-            Link(destination: URL(string: url)!) {
-                HStack(spacing: 4) {
-                    Text("Open")
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "arrow.up.right")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Text(symbol)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 6)
+    }
+
+    /// Model picker with friendly names and descriptions
+    private func modelRow(
+        _ label: String,
+        selection: Binding<String>,
+        options: [(name: String, id: String, detail: String)]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .padding(.horizontal, 24)
+                .padding(.top, 6)
+
+            ForEach(Array(options.enumerated()), id: \.offset) { _, opt in
+                modelOptionRow(opt: opt, isSelected: selection.wrappedValue == opt.id) {
+                    selection.wrappedValue = opt.id
+                }
+            }
+            .padding(.bottom, 4)
+        }
+    }
+
+    private func modelOptionRow(opt: (name: String, id: String, detail: String), isSelected: Bool, onTap: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(isSelected ? Color.accentColor : Color.gray)
+                .font(.body)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(opt.name).font(.callout)
+                Text(opt.detail).font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+    }
+
+    /// Acknowledgment row with library name, author, and link
+    private func acknowledgmentRow(_ name: String, by author: String, url: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name).font(.callout)
+                Text(author).font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Link(destination: URL(string: url)!) {
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 5)
     }
 
     // MARK: - Bindings
@@ -269,10 +350,10 @@ struct SettingsDetailView: View {
     private var performanceEstimate: String {
         let asr = appState.selectedASRModel
         let llm = appState.selectedLLMModel
-        let asrTime = asr.contains("tiny") ? "~0.1s" : asr.contains("turbo") ? "~1.2s" : "~0.5s"
-        let llmTime = llm.contains("0.6B") || llm.contains("0.3B") ? "~0.5s" :
-                       llm.contains("1.7B") || llm.contains("1B") ? "~1.3s" : "~0.5s"
-        return "\(asrTime) + \(llmTime)"
+        let t1 = asr.contains("tiny") ? "~0.1s" : asr.contains("turbo") ? "~1.2s" : "~0.5s"
+        let t2 = llm.contains("0.6B") || llm.contains("0.3B") ? "~0.5s" :
+                  llm.contains("1.7B") || llm.contains("1B") ? "~1.3s" : "~0.5s"
+        return "\(t1) + \(t2)"
     }
 
     private func syncLaunchAtLoginState() {
@@ -282,15 +363,11 @@ struct SettingsDetailView: View {
 
     private func setLaunchAtLogin(_ enabled: Bool) {
         guard #available(macOS 13.0, *) else {
-            launchAtLoginError = "Launch at login requires macOS 13 or newer."
-            return
+            launchAtLoginError = "Requires macOS 13+"; return
         }
         do {
-            if enabled {
-                try SMAppService.mainApp.register()
-            } else {
-                try SMAppService.mainApp.unregister()
-            }
+            if enabled { try SMAppService.mainApp.register() }
+            else { try SMAppService.mainApp.unregister() }
             launchAtLoginError = nil
         } catch {
             launchAtLoginEnabled.toggle()

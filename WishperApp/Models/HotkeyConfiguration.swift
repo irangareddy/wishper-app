@@ -9,34 +9,34 @@ struct HotkeyConfiguration: Codable, Equatable, Hashable {
         NSEvent.ModifierFlags(rawValue: modifierFlagsRawValue).intersection(.deviceIndependentFlagsMask)
     }
 
+    /// Symbol-based display (⌘ ⇧ ⌃ ⌥ fn) for UI badges
+    var symbolString: String {
+        if keyCode == 54 { return "⌘ Right" }
+        if keyCode == 55, keyChar == nil, modifierFlags == [.command] { return "⌘ Left" }
+        if keyCode == 63 { return "fn" }
+
+        let mods = modifierFlags.symbolString
+        let key = keyChar?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+
+        if let key, !key.isEmpty {
+            return mods.isEmpty ? key : "\(mods) \(key)"
+        }
+        return mods.isEmpty ? "None" : mods
+    }
+
+    /// Text-based display for accessibility and logs
     var displayString: String {
-        if keyCode == 54 {
-            return "Right Command"
-        }
-
-        if keyCode == 55, keyChar == nil, modifierFlags == [.command] {
-            return "Left Command"
-        }
-
-        if keyCode == 63 {
-            return "Fn"
-        }
+        if keyCode == 54 { return "Right Command" }
+        if keyCode == 55, keyChar == nil, modifierFlags == [.command] { return "Left Command" }
+        if keyCode == 63 { return "Fn" }
 
         let modifiers = modifierFlags.displayString
         let key = keyChar?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
 
         if let key, !key.isEmpty {
-            if modifiers.isEmpty {
-                return key
-            }
-            return "\(modifiers) + \(key)"
+            return modifiers.isEmpty ? key : "\(modifiers) + \(key)"
         }
-
-        if !modifiers.isEmpty {
-            return modifiers
-        }
-
-        return "None"
+        return modifiers.isEmpty ? "None" : modifiers
     }
 
     // Modifier-only hotkeys: modifierFlagsRawValue must be 0
@@ -75,25 +75,23 @@ struct HotkeyConfiguration: Codable, Equatable, Hashable {
 }
 
 extension NSEvent.ModifierFlags {
+    var symbolString: String {
+        var parts: [String] = []
+        if contains(.control) { parts.append("⌃") }
+        if contains(.option)  { parts.append("⌥") }
+        if contains(.shift)   { parts.append("⇧") }
+        if contains(.command) { parts.append("⌘") }
+        if contains(.function) { parts.append("fn") }
+        return parts.joined(separator: "")
+    }
+
     var displayString: String {
         var parts: [String] = []
-
-        if contains(.control) {
-            parts.append("Control")
-        }
-        if contains(.option) {
-            parts.append("Option")
-        }
-        if contains(.shift) {
-            parts.append("Shift")
-        }
-        if contains(.command) {
-            parts.append("Command")
-        }
-        if contains(.function) {
-            parts.append("Fn")
-        }
-
+        if contains(.control) { parts.append("Control") }
+        if contains(.option)  { parts.append("Option") }
+        if contains(.shift)   { parts.append("Shift") }
+        if contains(.command) { parts.append("Command") }
+        if contains(.function) { parts.append("Fn") }
         return parts.joined(separator: " + ")
     }
 }
