@@ -43,10 +43,13 @@ struct SettingsDetailView: View {
                 }
 
                 settingsSection("Shortcuts") {
-                    shortcutRow("Push to talk", config: appState.hotkeyConfig)
-                    shortcutRow("Hands-free", config: appState.handsFreeConfig)
-                    shortcutRow("Paste last", symbol: "⌃⌘V")
-                    shortcutRow("Cancel", symbol: "⎋")
+                    recordableShortcutRow("Push to talk", configuration: $appState.hotkeyConfig)
+                    pickerShortcutRow("Hands-free mode", selection: handsFreeBinding, options: [
+                        ("fn Space", HotkeyConfiguration.fnSpace),
+                        ("⇧⌘ Space", HotkeyConfiguration.shiftCommandSpace),
+                    ])
+                    shortcutRow("Paste last transcript", symbol: "⌃⌘V")
+                    shortcutRow("Cancel recording", symbol: "⎋")
                 }
 
                 settingsSection("Appearance") {
@@ -104,17 +107,6 @@ struct SettingsDetailView: View {
                             Text(performanceEstimate)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                        }
-
-                        Divider().padding(.horizontal, 24).padding(.vertical, 4)
-
-                        // Shortcut customization
-                        labeledRow("Push to talk key") {
-                            ShortcutRecorderView(configuration: $appState.hotkeyConfig)
-                        }
-                        pickerRow("Hands-free key", selection: handsFreeBinding) {
-                            Text("fn Space").tag(HotkeyConfiguration.fnSpace)
-                            Text("⇧⌘ Space").tag(HotkeyConfiguration.shiftCommandSpace)
                         }
 
                         Divider().padding(.horizontal, 24).padding(.vertical, 4)
@@ -238,11 +230,35 @@ struct SettingsDetailView: View {
         .padding(.vertical, 6)
     }
 
-    /// Shortcut row — shows a keyboard symbol badge
-    private func shortcutRow(_ label: String, config: HotkeyConfiguration) -> some View {
-        shortcutRow(label, symbol: config.symbolString)
+    /// Recordable shortcut — shows current key or "Record Shortcut"
+    private func recordableShortcutRow(_ label: String, configuration: Binding<HotkeyConfiguration>) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            ShortcutRecorderView(configuration: configuration)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 6)
     }
 
+    /// Picker-based shortcut — dropdown for predefined combos
+    private func pickerShortcutRow(_ label: String, selection: Binding<HotkeyConfiguration>, options: [(String, HotkeyConfiguration)]) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Picker("", selection: selection) {
+                ForEach(Array(options.enumerated()), id: \.offset) { _, opt in
+                    Text(opt.0).tag(opt.1)
+                }
+            }
+            .labelsHidden()
+            .frame(maxWidth: 140)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 6)
+    }
+
+    /// Fixed shortcut — read-only keycap badge
     private func shortcutRow(_ label: String, symbol: String) -> some View {
         HStack {
             Text(label)
