@@ -41,7 +41,7 @@ struct MainWindowView: View {
                 }
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 140, ideal: 160, max: 180)
+            .navigationSplitViewColumnWidth(min: 150, ideal: 160, max: 170)
         } detail: {
             Group {
                 switch selectedItem {
@@ -65,6 +65,6 @@ struct MainWindowView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 560, idealWidth: 620, maxWidth: 720, minHeight: 420, idealHeight: 520, maxHeight: 640)
+        .frame(minWidth: 560, idealWidth: 660, maxWidth: 760, minHeight: 420, idealHeight: 500, maxHeight: 600)
     }
 }
