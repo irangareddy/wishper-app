@@ -175,6 +175,9 @@ private struct TranscriptRow: View {
 
     @State private var showsRawText = false
     @State private var isHovering = false
+    @State private var showSilentInfo = false
+
+    private var isSilent: Bool { entry.raw == "Audio is silent." }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -184,17 +187,42 @@ private struct TranscriptRow: View {
                 .monospacedDigit()
                 .frame(width: 52, alignment: .trailing)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(displayText)
-                    .font(.body)
-                    .lineSpacing(3)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if isSilent {
+                HStack(spacing: 6) {
+                    Text("Audio is silent")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .italic()
 
-                if showsRawText {
-                    Text("Showing raw transcript")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
+                    Button {
+                        showSilentInfo = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showSilentInfo, arrowEdge: .trailing) {
+                        Text("No speech was detected in this recording. The microphone captured only silence or background noise below the threshold.")
+                            .font(.caption)
+                            .padding(12)
+                            .frame(width: 220)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(displayText)
+                        .font(.body)
+                        .lineSpacing(3)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if showsRawText {
+                        Text("Showing raw transcript")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
         }
