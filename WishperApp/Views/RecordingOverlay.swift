@@ -210,31 +210,61 @@ private struct OverlayContent: View {
     var onUndo: () -> Void
 
     @State private var hoverTarget: HoverTarget?
-    private enum HoverTarget { case cancel, stop }
+    private enum HoverTarget { case idle, cancel, stop }
 
     private var isTopPosition: Bool { model.chipPosition == .belowNotch }
 
     var body: some View {
-        VStack(spacing: 6) {
+        // Chip is FIXED at top (or bottom). Suggestions slide in below (or above).
+        // Using VStack with Spacer so the chip never moves.
+        VStack(spacing: 0) {
             if isTopPosition {
+                // CHIP pinned to top
+                chipArea
+                    .padding(.top, 4)
+
+                // Suggestions slide in from top, below the chip
+                suggestionsArea
+                    .padding(.top, 6)
+
                 Spacer(minLength: 0)
-                hoverHint
-                activeChip
-                if model.state == .idle {
-                    IdleChip(onTap: onTap, hotkeyLabel: model.hotkeyLabel, growsDown: true)
-                }
             } else {
-                if model.state == .idle {
-                    IdleChip(onTap: onTap, hotkeyLabel: model.hotkeyLabel, growsDown: false)
-                }
-                activeChip
-                hoverHint
                 Spacer(minLength: 0)
+
+                // Suggestions slide in from bottom, above the chip
+                suggestionsArea
+                    .padding(.bottom, 6)
+
+                // CHIP pinned to bottom
+                chipArea
+                    .padding(.bottom, 4)
             }
         }
         .frame(width: ChipLayout.windowWidth, height: ChipLayout.windowHeight)
-        .animation(reduceMotion ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: model.state)
         .animation(.easeOut(duration: 0.12), value: hoverTarget)
+    }
+
+    /// The chip area — always in the same position, never moves
+    @ViewBuilder
+    private var chipArea: some View {
+        Group {
+            if model.state == .idle {
+                IdleChip(onTap: onTap, hotkeyLabel: model.hotkeyLabel, growsDown: isTopPosition)
+                    .onHover { h in hoverTarget = h ? .idle : nil }
+            } else {
+                activeChip
+            }
+        }
+        .animation(reduceMotion ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: model.state)
+    }
+
+    /// Suggestions/hints — slides in/out without moving the chip
+    @ViewBuilder
+    private var suggestionsArea: some View {
+        Group {
+            hoverHint
+        }
+        .transition(isTopPosition ? .move(edge: .top).combined(with: .opacity) : .move(edge: .bottom).combined(with: .opacity))
     }
 
     @ViewBuilder
@@ -269,11 +299,36 @@ private struct OverlayContent: View {
 
     @ViewBuilder
     private var hoverHint: some View {
-        if let target = hoverTarget {
-            Text(target == .cancel ? "Cancel" : "Done")
+        switch hoverTarget {
+        case .idle:
+            Button(action: onTap) {
+                HStack(spacing: 6) {
+                    Text("Start recording")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.85))
+                    Text(model.hotkeyLabel)
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
+                }
+                .padding(.horizontal, 12)
+                .frame(height: ChipLayout.chipHeight)
+                .background(ChipBackground())
+                .shadow(color: .black.opacity(0.14), radius: 6, y: 3)
+            }
+            .buttonStyle(.plain)
+        case .cancel:
+            Text("Cancel")
                 .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(target == .cancel ? .white.opacity(0.7) : .red.opacity(0.9))
-                .transition(.opacity)
+                .foregroundStyle(.white.opacity(0.7))
+        case .stop:
+            Text("Done")
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(.red.opacity(0.9))
+        case nil:
+            EmptyView()
         }
     }
 }
@@ -308,54 +363,18 @@ private struct IdleChip: View {
     var growsDown: Bool = true
     @State private var isHovering = false
 
-    private var hoverChip: some View {
-        Button(action: onTap) {
-            HStack(spacing: 6) {
-                Text("Start recording")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.85))
-
-                Text(hotkeyLabel)
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
-            }
-            .padding(.horizontal, 12)
-            .frame(height: ChipLayout.chipHeight)
-            .background(ChipBackground())
-            .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
-        }
-        .buttonStyle(.plain)
-        .transition(.move(edge: growsDown ? .top : .bottom).combined(with: .opacity))
-    }
-
-    private var idleBar: some View {
+    var body: some View {
+        // Just the bar — the hover suggestion comes from suggestionsArea in OverlayContent
         Capsule()
             .strokeBorder(Color.white.opacity(isHovering ? 0.5 : 0.35), lineWidth: 1)
             .frame(width: 36, height: 8)
-            .contentShape(Rectangle().size(width: 120, height: 20).offset(x: -42, y: -6))
+            .contentShape(Rectangle().size(width: 120, height: 24).offset(x: -42, y: -8))
             .onTapGesture { onTap() }
-    }
-
-    var body: some View {
-        VStack(spacing: 4) {
-            if growsDown {
-                // Top position: bar first, hover chip below
-                idleBar
-                if isHovering { hoverChip }
-            } else {
-                // Bottom position: hover chip above, bar below
-                if isHovering { hoverChip }
-                idleBar
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.12)) {
+                    isHovering = hovering
+                }
             }
-        }
-        .onHover { hovering in
-            withAnimation(.snappy(duration: 0.2)) {
-                isHovering = hovering
-            }
-        }
     }
 }
 
