@@ -61,6 +61,7 @@ nonisolated final class ModifierKeyDetector: @unchecked Sendable {
     private var eventTap: CFMachPort?
     private var isPttDown = false
     private let permissionManager = AccessibilityPermissionManager()
+    private var watchdogTimer: Timer?
 
     /// Map key name strings to (keyCode, modifierFlag)
     static let keyMap: [String: (keyCode: UInt16, flag: NSEvent.ModifierFlags)] = [
@@ -104,7 +105,7 @@ nonisolated final class ModifierKeyDetector: @unchecked Sendable {
             }
         }
 
-        // Always try to create tap — may work before isGranted reports true
+        // Always try to create tap
         createTap()
 
         // If tap failed, prompt for permission
@@ -112,9 +113,28 @@ nonisolated final class ModifierKeyDetector: @unchecked Sendable {
             logger.warning("tap failed — requesting accessibility permission")
             AccessibilityPermissionManager.requestPermission()
         }
+
+        // Watchdog: re-enable tap every 3s if macOS disabled it
+        watchdogTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            if let tap = self.eventTap {
+                if !CGEvent.tapIsEnabled(tap: tap) {
+                    CGEvent.tapEnable(tap: tap, enable: true)
+                    self.logger.info("watchdog re-enabled tap")
+                }
+            } else {
+                // Tap completely gone — recreate
+                self.createTap()
+                if self.eventTap != nil {
+                    self.logger.info("watchdog recreated tap")
+                }
+            }
+        }
     }
 
     func stop() {
+        watchdogTimer?.invalidate()
+        watchdogTimer = nil
         destroyTap()
         permissionManager.onPermissionChange = nil
     }
