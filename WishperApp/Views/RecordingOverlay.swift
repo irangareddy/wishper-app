@@ -285,11 +285,11 @@ private struct IdleChip: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Thin bar — always visible at the bottom
+            // Thin pill bar — always visible at the bottom
             Capsule()
-                .fill(Color.white.opacity(isActive ? 0.15 : (isHovering ? 0.45 : 0.3)))
-                .frame(width: 36, height: 4)
-                .contentShape(Rectangle().size(width: ChipLayout.width, height: 20).offset(x: -73, y: -8))
+                .strokeBorder(Color.white.opacity(isActive ? 0.12 : (isHovering ? 0.4 : 0.25)), lineWidth: 2)
+                .frame(width: 36, height: 8)
+                .contentShape(Rectangle().size(width: ChipLayout.width, height: 20).offset(x: -67, y: -6))
                 .onTapGesture { onTap() }
         }
         .onHover { hovering in
@@ -536,4 +536,76 @@ private struct PromptBubble: View {
         .overlay { Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1) }
         .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
     }
+}
+
+// MARK: - Previews
+
+#Preview("Idle Chip") {
+    IdleChip(onTap: {})
+        .padding(40)
+        .background(Color(white: 0.15))
+}
+
+#Preview("Idle Chip — Hover") {
+    IdleChip(onTap: {}, isActive: false)
+        .padding(40)
+        .background(Color(white: 0.15))
+}
+
+#Preview("Recording Chip") {
+    RecordingChip(
+        levels: [0.3, 0.5, 0.7, 0.9, 1.0, 0.8, 0.6, 0.4, 0.5, 0.7, 0.3],
+        onCancel: {},
+        onStop: {}
+    )
+    .padding(40)
+    .background(Color(white: 0.15))
+}
+
+#Preview("Processing Chip") {
+    ProcessingChip()
+        .padding(40)
+        .background(Color(white: 0.15))
+}
+
+#Preview("Done Chip") {
+    DoneChip()
+        .padding(40)
+        .background(Color(white: 0.15))
+}
+
+#Preview("Cancelled Chip") {
+    CancelledChip(onUndo: {})
+        .padding(40)
+        .background(Color(white: 0.15))
+}
+
+#Preview("Ready Prompt") {
+    ReadyPromptChip(prompt: RecordingOverlayPrompt(
+        prefix: "Tap mic or hold ",
+        hotkey: "Right Command",
+        suffix: " to dictate"
+    ))
+    .padding(40)
+    .background(Color(white: 0.15))
+}
+
+#Preview("All States") {
+    VStack(spacing: 20) {
+        IdleChip(onTap: {})
+
+        RecordingChip(
+            levels: [0.3, 0.5, 0.7, 0.9, 1.0, 0.8, 0.6, 0.4, 0.5, 0.7, 0.3],
+            onCancel: {},
+            onStop: {}
+        )
+
+        ProcessingChip()
+
+        DoneChip()
+
+        CancelledChip(onUndo: {})
+    }
+    .padding(40)
+    .background(Color(white: 0.15))
 }
