@@ -241,6 +241,7 @@ final class PipelineCoordinator {
         guard !silent else {
             logger.info("silence fallback triggered")
             appState.statusMessage = "No speech detected"
+            appState.addToHistory(raw: "Audio is silent.", cleaned: "Audio is silent.")
             overlay.hide()
             return
         }
@@ -260,6 +261,14 @@ final class PipelineCoordinator {
             appState.isTranscribing = false
             appState.liveTranscript = ""
             logger.info("transcription completed: \(raw.count) chars")
+
+            guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                appState.statusMessage = "No speech detected"
+                appState.addToHistory(raw: "Audio is silent.", cleaned: "Audio is silent.")
+                overlay.hide()
+                isProcessing = false
+                return
+            }
 
             // Voice commands
             let afterCommands = VoiceCommands.process(raw)

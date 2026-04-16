@@ -30,7 +30,7 @@ struct WishperApp: App {
         Window("Wishper", id: "main") {
             MainWindowView(appState: appState)
         }
-        .defaultSize(width: 800, height: 600)
+        .defaultSize(width: 700, height: 550)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
 

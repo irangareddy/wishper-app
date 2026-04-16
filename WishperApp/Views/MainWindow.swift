@@ -65,6 +65,6 @@ struct MainWindowView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 700, minHeight: 500)
+        .frame(minWidth: 600, idealWidth: 700, maxWidth: 850, minHeight: 450, idealHeight: 550, maxHeight: 700)
     }
 }
