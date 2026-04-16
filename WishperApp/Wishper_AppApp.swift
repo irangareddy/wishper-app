@@ -10,21 +10,38 @@ struct WishperApp: App {
     @State private var coordinator: PipelineCoordinator?
     @Environment(\.openWindow) private var openWindow
     @AppStorage("onboardingCompleted") private var onboardingCompleted = false
+    @State private var needsOnboarding = false
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarMenu(appState: appState, onOpenWindow: {
                 NSApp.setActivationPolicy(.regular)
-                openWindow(id: "main")
+                if !onboardingCompleted {
+                    openWindow(id: "onboarding")
+                } else {
+                    openWindow(id: "main")
+                }
                 NSApp.activate(ignoringOtherApps: true)
             })
         } label: {
-            if appState.isRecording {
-                Image(systemName: "waveform.circle.fill")
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, .red)
-            } else {
-                Image(systemName: "waveform.and.mic")
+            Group {
+                if appState.isRecording {
+                    Image(systemName: "waveform.circle.fill")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .red)
+                } else {
+                    Image(systemName: "waveform.and.mic")
+                }
+            }
+            .onAppear {
+                if needsOnboarding {
+                    needsOnboarding = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        NSApp.setActivationPolicy(.regular)
+                        openWindow(id: "onboarding")
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
+                }
             }
         }
 
@@ -36,7 +53,7 @@ struct WishperApp: App {
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
 
-        // Onboarding window
+        // Onboarding window — opens automatically on first launch
         Window("Welcome to Wishper", id: "onboarding") {
             OnboardingView {
                 onboardingCompleted = true
@@ -67,22 +84,10 @@ struct WishperApp: App {
         logger.debug("app init scheduling pipeline start")
         Task { @MainActor in
             await coord.start()
+        }
 
-            // Show onboarding on first launch
-            if !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    NSApp.setActivationPolicy(.regular)
-                    NSApp.activate(ignoringOtherApps: true)
-                    // Open the onboarding window
-                    for window in NSApp.windows {
-                        if window.title == "Welcome to Wishper" {
-                            window.makeKeyAndOrderFront(nil)
-                            window.center()
-                            return
-                        }
-                    }
-                }
-            }
+        if !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
+            needsOnboarding = true
         }
     }
 }
