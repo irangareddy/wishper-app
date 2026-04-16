@@ -241,7 +241,7 @@ private struct OverlayContent: View {
             }
         }
         .frame(width: ChipLayout.windowWidth, height: ChipLayout.windowHeight)
-        .animation(.easeOut(duration: 0.12), value: hoverTarget)
+        .animation(.easeInOut(duration: 0.3), value: hoverTarget)
     }
 
     /// The chip area — always in the same position, never moves
@@ -255,7 +255,7 @@ private struct OverlayContent: View {
                 activeChip
             }
         }
-        .animation(reduceMotion ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: model.state)
+        .animation(reduceMotion ? .none : .spring(response: 0.45, dampingFraction: 0.85), value: model.state)
     }
 
     /// Suggestions/hints — slides in/out without moving the chip
@@ -264,7 +264,11 @@ private struct OverlayContent: View {
         Group {
             hoverHint
         }
-        .transition(isTopPosition ? .move(edge: .top).combined(with: .opacity) : .move(edge: .bottom).combined(with: .opacity))
+        .transition(
+            AnyTransition.move(edge: isTopPosition ? .top : .bottom)
+                .combined(with: .opacity)
+        )
+        .animation(.easeInOut(duration: 0.35), value: hoverTarget)
     }
 
     @ViewBuilder
@@ -292,7 +296,7 @@ private struct OverlayContent: View {
                 .transition(.opacity)
         case .done:
             DoneChip()
-                .transition(.opacity.animation(.easeOut(duration: 0.4)))
+                .transition(.opacity.animation(.easeInOut(duration: 0.6)))
         case .cancelled:
             CancelledChip(onUndo: onUndo)
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
@@ -325,8 +329,8 @@ private struct ChipBackground: View {
             .fill(
                 LinearGradient(
                     colors: [
-                        Color(white: 0.10).opacity(0.94),
-                        Color(white: 0.05).opacity(0.92)
+                        Color(red: 0.12, green: 0.10, blue: 0.18).opacity(0.94),
+                        Color(red: 0.06, green: 0.05, blue: 0.10).opacity(0.92)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -334,7 +338,7 @@ private struct ChipBackground: View {
             )
             .overlay {
                 Capsule()
-                    .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
+                    .strokeBorder(Color(red: 0.65, green: 0.55, blue: 0.95).opacity(0.15), lineWidth: 1)
             }
     }
 }
@@ -350,12 +354,12 @@ private struct IdleChip: View {
     var body: some View {
         // Just the bar — the hover suggestion comes from suggestionsArea in OverlayContent
         Capsule()
-            .strokeBorder(Color.white.opacity(isHovering ? 0.5 : 0.35), lineWidth: 1)
+            .strokeBorder(Color(red: 0.65, green: 0.55, blue: 0.95).opacity(isHovering ? 0.6 : 0.35), lineWidth: 1)
             .frame(width: 36, height: 8)
             .contentShape(Rectangle().size(width: 120, height: 24).offset(x: -42, y: -8))
             .onTapGesture { onTap() }
             .onHover { hovering in
-                withAnimation(.easeOut(duration: 0.12)) {
+                withAnimation(.easeInOut(duration: 0.25)) {
                     isHovering = hovering
                 }
             }
@@ -549,7 +553,7 @@ private struct PromptBubble: View {
             Text(prompt.prefix)
                 .foregroundStyle(Color.white.opacity(0.96))
             Text(prompt.hotkey)
-                .foregroundStyle(Color(red: 0.92, green: 0.50, blue: 0.84))
+                .foregroundStyle(Color(red: 0.65, green: 0.55, blue: 0.95))
             Text(prompt.suffix)
                 .foregroundStyle(Color.white.opacity(0.96))
         }
@@ -559,7 +563,10 @@ private struct PromptBubble: View {
         .padding(.vertical, 10)
         .background(
             LinearGradient(
-                colors: [Color(white: 0.10).opacity(0.94), Color(white: 0.05).opacity(0.92)],
+                colors: [
+                    Color(red: 0.12, green: 0.10, blue: 0.18).opacity(0.94),
+                    Color(red: 0.06, green: 0.05, blue: 0.10).opacity(0.92)
+                ],
                 startPoint: .top, endPoint: .bottom
             ),
             in: Capsule()
