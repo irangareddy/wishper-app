@@ -32,34 +32,14 @@ struct SettingsDetailView: View {
 
             // ── Shortcuts ──
             Section {
-                LabeledContent("Push to talk") {
-                    Text("fn")
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
-                }
+                KeyboardShortcuts.Recorder("Push to talk", name: .pushToTalk)
                 KeyboardShortcuts.Recorder("Hands-free mode", name: .handsFree)
+                KeyboardShortcuts.Recorder("Cancel recording", name: .cancelRecording)
                 KeyboardShortcuts.Recorder("Paste last transcript", name: .pasteLastTranscript)
-                LabeledContent("Stop hands-free") {
-                    Text("fn")
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
-                }
-                LabeledContent("Cancel") {
-                    Text("⎋")
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
-                }
             } header: {
                 Text("Shortcuts")
+            } footer: {
+                Text("fn key also works for push-to-talk and stopping hands-free.")
             }
 
             // ── Appearance ──

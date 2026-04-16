@@ -77,17 +77,53 @@ final class PipelineCoordinator {
         }
         memoryMonitor.startPolling()
 
-        // ── fn key via CGEventTap (only thing that needs it) ──
+        // ── KeyboardShortcuts (all customizable) ──
+
+        // Push to talk: key down → start, key up → stop
+        KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [weak self] in
+            Task { @MainActor in
+                guard let self, !self.recorder.isRecording else { return }
+                self.isPushToTalkActive = true
+                self.startRecording()
+            }
+        }
+        KeyboardShortcuts.onKeyUp(for: .pushToTalk) { [weak self] in
+            Task { @MainActor in
+                guard let self, self.isPushToTalkActive else { return }
+                self.isPushToTalkActive = false
+                await self.stopAndProcess()
+            }
+        }
+
+        // Hands-free: start recording (fn or cancel shortcut to stop)
+        KeyboardShortcuts.onKeyUp(for: .handsFree) { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                if !self.isHandsFreeActive && !self.recorder.isRecording {
+                    self.isHandsFreeActive = true
+                    self.startRecording()
+                }
+            }
+        }
+
+        // Cancel
+        KeyboardShortcuts.onKeyUp(for: .cancelRecording) { [weak self] in
+            Task { @MainActor in self?.cancelRecording() }
+        }
+
+        // Paste last transcript
+        KeyboardShortcuts.onKeyUp(for: .pasteLastTranscript) { [weak self] in
+            Task { @MainActor in self?.pasteLastTranscript() }
+        }
+
+        // ── fn key bonus (CGEventTap — also works as PTT + stop hands-free) ──
         fnDetector.onFnDown = { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
                 if self.isHandsFreeActive {
-                    // fn stops hands-free → transcribe & paste
                     self.isHandsFreeActive = false
-                    self.logger.info("fn stopped hands-free")
                     await self.stopAndProcess()
-                } else {
-                    // fn starts push-to-talk
+                } else if !self.recorder.isRecording {
                     self.isPushToTalkActive = true
                     self.startRecording()
                 }
@@ -95,12 +131,9 @@ final class PipelineCoordinator {
         }
         fnDetector.onFnUp = { [weak self] in
             Task { @MainActor in
-                guard let self else { return }
-                if self.isPushToTalkActive {
-                    self.isPushToTalkActive = false
-                    await self.stopAndProcess()
-                }
-                // If hands-free, fn release is ignored
+                guard let self, self.isPushToTalkActive else { return }
+                self.isPushToTalkActive = false
+                await self.stopAndProcess()
             }
         }
         fnDetector.onEsc = { [weak self] in
@@ -108,21 +141,7 @@ final class PipelineCoordinator {
         }
         fnDetector.start()
 
-        // ── KeyboardShortcuts (standard combos, no CGEventTap needed) ──
-        KeyboardShortcuts.onKeyUp(for: .handsFree) { [weak self] in
-            Task { @MainActor in
-                guard let self else { return }
-                if !self.isHandsFreeActive && !self.recorder.isRecording {
-                    self.isHandsFreeActive = true
-                    self.logger.info("hands-free started via KeyboardShortcuts")
-                    self.startRecording()
-                }
-            }
-        }
-        KeyboardShortcuts.onKeyUp(for: .pasteLastTranscript) { [weak self] in
-            Task { @MainActor in self?.pasteLastTranscript() }
-        }
-        logger.info("hotkeys registered: fn=PTT, ⌃Space=handsFree, ⌃⌘V=paste")
+        logger.info("all shortcuts registered")
 
         // Wire chip interactions
         overlay.onChipTapped = { [weak self] in
