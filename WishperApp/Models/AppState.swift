@@ -28,7 +28,6 @@ final class AppState: ObservableObject {
     @Published var cleanupEnabled = false
     @Published var transcriptionLanguage = "en"
     @Published var pushToTalkConfig = HotkeyConfiguration.fn
-    @Published var handsFreeConfig = HotkeyConfiguration.fnSpace
     @Published var soundsEnabled = true
     @Published var chipPosition: ChipPosition = .belowNotch
     @Published var statusMessage = "Ready"

@@ -76,7 +76,7 @@ final class PipelineCoordinator {
         }
         memoryMonitor.startPolling()
 
-        // Push to talk + Hands-free via HotkeyManager (supports fn alone)
+        // Push to talk via HotkeyManager (supports fn alone)
         hotkeyManager.onRecordingStart = { [weak self] in
             Task { @MainActor in self?.startRecording() }
         }
@@ -86,21 +86,25 @@ final class PipelineCoordinator {
         hotkeyManager.onCancel = { [weak self] in
             Task { @MainActor in self?.cancelRecording() }
         }
-        hotkeyManager.onHandsFreeToggle = { [weak self] shouldStart in
-            Task { @MainActor in
-                if shouldStart { self?.startRecording() }
-                else { await self?.stopAndProcess() }
-            }
-        }
 
         let ptt = appState.pushToTalkConfig
-        let hf = appState.handsFreeConfig
-        hotkeyManager.startDualMode(
-            pttKeyCode: ptt.keyCode,
-            pttModifiers: ptt.modifierFlags,
-            handsFreeKeyCode: hf.keyCode,
-            handsFreeModifiers: hf.modifierFlags
+        hotkeyManager.start(
+            mode: .pushToTalk,
+            keyCode: ptt.keyCode,
+            modifiers: ptt.modifierFlags
         )
+
+        // Hands-free via KeyboardShortcuts (fn+Space is modifier+key)
+        KeyboardShortcuts.onKeyUp(for: .handsFree) { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                if self.recorder.isRecording {
+                    await self.stopAndProcess()
+                } else {
+                    self.startRecording()
+                }
+            }
+        }
 
         // Paste last transcript via KeyboardShortcuts (standard ⌃⌘V)
         KeyboardShortcuts.onKeyUp(for: .pasteLastTranscript) { [weak self] in
