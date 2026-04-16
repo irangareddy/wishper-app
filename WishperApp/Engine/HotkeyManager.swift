@@ -93,8 +93,14 @@ final class FnKeyDetector {
 
                 // If tap was completely destroyed, recreate it
                 if self.eventTap == nil {
-                    self.logger.warning("fn key tap lost — recreating")
-                    self.createTap()
+                    if AXIsProcessTrusted() {
+                        self.logger.warning("fn key tap lost — recreating")
+                        self.createTap()
+                    } else {
+                        self.logger.warning("fn key tap lost — Accessibility permission missing")
+                        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
+                        AXIsProcessTrustedWithOptions(options)
+                    }
                 }
             }
         }
