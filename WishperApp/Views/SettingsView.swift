@@ -35,7 +35,9 @@ struct SettingsDetailView: View {
                 LabeledContent("Push to talk") {
                     ShortcutRecorderView(configuration: $appState.pushToTalkConfig)
                 }
-                KeyboardShortcuts.Recorder("Hands-free mode", name: .handsFree)
+                LabeledContent("Hands-free mode") {
+                    ShortcutRecorderView(configuration: $appState.handsFreeConfig)
+                }
                 KeyboardShortcuts.Recorder("Paste last transcript", name: .pasteLastTranscript)
                 LabeledContent("Cancel recording") {
                     Text("⎋")
