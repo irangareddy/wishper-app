@@ -14,9 +14,10 @@ final class PipelineCoordinator {
     private let streamingTranscriber: StreamingTranscriber
     private let cleaner: Cleaner
     private let injector = TextInjector()
-    private let hotkeyManager = HotkeyManager()
+    private let fnDetector = FnKeyDetector()
     private let sounds = SoundPlayer()
     private var isHandsFreeActive = false
+    private var isPushToTalkActive = false
     private let overlay = RecordingOverlayController()
 
     private var isProcessing = false
@@ -76,36 +77,52 @@ final class PipelineCoordinator {
         }
         memoryMonitor.startPolling()
 
-        // Push to talk + Hands-free via HotkeyManager (fn key needs CGEventTap)
-        hotkeyManager.onRecordingStart = { [weak self] in
-            Task { @MainActor in self?.startRecording() }
-        }
-        hotkeyManager.onRecordingStop = { [weak self] in
-            Task { @MainActor in await self?.stopAndProcess() }
-        }
-        hotkeyManager.onCancel = { [weak self] in
-            Task { @MainActor in self?.cancelRecording() }
-        }
-        hotkeyManager.onHandsFreeToggle = { [weak self] shouldStart in
+        // ── fn key via CGEventTap (only thing that needs it) ──
+        fnDetector.onFnDown = { [weak self] in
             Task { @MainActor in
-                if shouldStart { self?.startRecording() }
-                else { await self?.stopAndProcess() }
+                guard let self else { return }
+                if self.isHandsFreeActive {
+                    // fn stops hands-free → transcribe & paste
+                    self.isHandsFreeActive = false
+                    self.logger.info("fn stopped hands-free")
+                    await self.stopAndProcess()
+                } else {
+                    // fn starts push-to-talk
+                    self.isPushToTalkActive = true
+                    self.startRecording()
+                }
             }
         }
+        fnDetector.onFnUp = { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                if self.isPushToTalkActive {
+                    self.isPushToTalkActive = false
+                    await self.stopAndProcess()
+                }
+                // If hands-free, fn release is ignored
+            }
+        }
+        fnDetector.onEsc = { [weak self] in
+            Task { @MainActor in self?.cancelRecording() }
+        }
+        fnDetector.start()
 
-        let ptt = appState.pushToTalkConfig
-        let hf = appState.handsFreeConfig
-        hotkeyManager.startDualMode(
-            pttKeyCode: ptt.keyCode,
-            pttModifiers: ptt.modifierFlags,
-            handsFreeKeyCode: hf.keyCode,
-            handsFreeModifiers: hf.modifierFlags
-        )
-
-        // Paste last transcript via KeyboardShortcuts (standard ⌃⌘V)
+        // ── KeyboardShortcuts (standard combos, no CGEventTap needed) ──
+        KeyboardShortcuts.onKeyUp(for: .handsFree) { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                if !self.isHandsFreeActive && !self.recorder.isRecording {
+                    self.isHandsFreeActive = true
+                    self.logger.info("hands-free started via KeyboardShortcuts")
+                    self.startRecording()
+                }
+            }
+        }
         KeyboardShortcuts.onKeyUp(for: .pasteLastTranscript) { [weak self] in
             Task { @MainActor in self?.pasteLastTranscript() }
         }
+        logger.info("hotkeys registered: fn=PTT, ⌃Space=handsFree, ⌃⌘V=paste")
 
         // Wire chip interactions
         overlay.onChipTapped = { [weak self] in
@@ -125,8 +142,8 @@ final class PipelineCoordinator {
 
         // Set chip position and update overlay hotkey label
         overlay.setPosition(appState.chipPosition)
-        overlay.setHotkeyLabel(ptt.symbolString)
-        logger.info("hotkeys: ptt=\(ptt.symbolString) hf=\(hf.symbolString)")
+        overlay.setHotkeyLabel("fn")
+        logger.info("hotkeys registered: fn=PTT, ⌃Space=handsFree, ⌃⌘V=paste")
         showReadyPrompt()
         logger.info("keyboard shortcuts registered")
     }
@@ -144,7 +161,7 @@ final class PipelineCoordinator {
     }
 
     func stop() {
-        hotkeyManager.stop()
+        fnDetector.stop()
         KeyboardShortcuts.removeAllHandlers()
         recorder.stop()
         memoryMonitor.stopPolling()
@@ -353,7 +370,7 @@ final class PipelineCoordinator {
     }
 
     private func showReadyPrompt() {
-        let shortcutLabel = appState.pushToTalkConfig.symbolString
+        let shortcutLabel = "fn"
         overlay.show(
             state: .readyPrompt,
             prompt: RecordingOverlayPrompt(

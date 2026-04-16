@@ -33,13 +33,24 @@ struct SettingsDetailView: View {
             // ── Shortcuts ──
             Section {
                 LabeledContent("Push to talk") {
-                    ShortcutRecorderView(configuration: $appState.pushToTalkConfig)
+                    Text("fn")
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
                 }
-                LabeledContent("Hands-free mode") {
-                    ShortcutRecorderView(configuration: $appState.handsFreeConfig)
-                }
+                KeyboardShortcuts.Recorder("Hands-free mode", name: .handsFree)
                 KeyboardShortcuts.Recorder("Paste last transcript", name: .pasteLastTranscript)
-                LabeledContent("Cancel recording") {
+                LabeledContent("Stop hands-free") {
+                    Text("fn")
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                }
+                LabeledContent("Cancel") {
                     Text("⎋")
                         .font(.system(.caption, design: .rounded, weight: .medium))
                         .foregroundStyle(.secondary)
