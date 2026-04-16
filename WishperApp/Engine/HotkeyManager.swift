@@ -5,6 +5,7 @@ import OSLog
 
 /// Minimal fn-key detector via CGEventTap.
 /// Only handles fn press/release (flagsChanged). Everything else uses KeyboardShortcuts.
+/// Includes a watchdog timer that re-enables the tap if macOS disables it.
 @MainActor
 final class FnKeyDetector {
     private let logger = WishperLog.voicePipeline
@@ -16,8 +17,24 @@ final class FnKeyDetector {
     nonisolated(unsafe) private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     nonisolated(unsafe) private var isFnDown = false
+    private var watchdogTask: Task<Void, Never>?
 
     func start() {
+        createTap()
+        startWatchdog()
+    }
+
+    func stop() {
+        watchdogTask?.cancel()
+        watchdogTask = nil
+        destroyTap()
+    }
+
+    // MARK: - Event Tap
+
+    private func createTap() {
+        destroyTap()
+
         let mask: CGEventMask =
             (1 << CGEventType.flagsChanged.rawValue) |
             (1 << CGEventType.keyDown.rawValue)
@@ -35,7 +52,7 @@ final class FnKeyDetector {
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            logger.error("fn key event tap creation failed")
+            logger.error("fn key event tap creation failed — check Accessibility permission")
             return
         }
 
@@ -48,7 +65,7 @@ final class FnKeyDetector {
         logger.info("fn key detector started")
     }
 
-    func stop() {
+    private func destroyTap() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
@@ -60,10 +77,33 @@ final class FnKeyDetector {
         isFnDown = false
     }
 
+    // MARK: - Watchdog (re-enables tap if macOS disables it)
+
+    private func startWatchdog() {
+        watchdogTask?.cancel()
+        watchdogTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                guard let self, let tap = self.eventTap else { continue }
+
+                if !CGEvent.tapIsEnabled(tap: tap) {
+                    self.logger.warning("fn key tap was disabled — re-enabling")
+                    CGEvent.tapEnable(tap: tap, enable: true)
+                }
+
+                // If tap was completely destroyed, recreate it
+                if self.eventTap == nil {
+                    self.logger.warning("fn key tap lost — recreating")
+                    self.createTap()
+                }
+            }
+        }
+    }
+
     // MARK: - Event Handling
 
     nonisolated private func handleEvent(type: CGEventType, event: CGEvent) {
-        // Re-enable tap if system disabled it
+        // Re-enable tap immediately if system disabled it
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
