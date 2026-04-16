@@ -256,7 +256,11 @@ final class HotkeyManager {
         guard let hfKeyCode = handsFreeKeyCode else { return }
 
         // Check if this is the hands-free combo key (e.g., Space with Fn modifier)
-        if type == .keyDown, keyCode == hfKeyCode, flags == handsFreeModifiers {
+        // Use .isSuperset for flags because macOS may report additional modifier bits.
+        // Also match when PTT (fn) is already held and the combo key arrives.
+        let isComboKey = type == .keyDown && keyCode == hfKeyCode &&
+            (flags.isSuperset(of: handsFreeModifiers) || (isPttKeyDown && keyCode == hfKeyCode))
+        if isComboKey {
             if isHandsFreeActive {
                 // Already in hands-free → stop
                 isHandsFreeActive = false
