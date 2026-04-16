@@ -257,36 +257,31 @@ final class HotkeyManager {
         guard let hfKeyCode = handsFreeKeyCode else { return }
 
         // Check if this is the hands-free combo key (e.g., Space with Fn modifier)
-        // Use .isSuperset for flags because macOS may report additional modifier bits.
-        // Also match when PTT (fn) is already held and the combo key arrives.
+        // fn+Space ALWAYS starts hands-free. fn alone stops it.
         let isComboKey = type == .keyDown && keyCode == hfKeyCode &&
-            (flags.isSuperset(of: handsFreeModifiers) || (isPttKeyDown && keyCode == hfKeyCode))
+            (flags.isSuperset(of: handsFreeModifiers) || isPttKeyDown)
 
         // Debounce: both CGEvent tap and NSEvent monitor fire for the same keypress.
-        // Without this, hands-free toggles ON then immediately OFF.
         let now = CFAbsoluteTimeGetCurrent()
-        if isComboKey, now - lastComboTime > 0.1 {
+        if isComboKey, now - lastComboTime > 0.15 {
             lastComboTime = now
-            if isHandsFreeActive {
-                // Already in hands-free → stop
-                isHandsFreeActive = false
-                logger.info("hands-free stopped via combo source=\(source, privacy: .public)")
-                onHandsFreeToggle?(false)
-            } else {
-                // Activate hands-free
+
+            if !isHandsFreeActive {
+                // Start hands-free recording
                 isHandsFreeActive = true
-                if isPttKeyDown {
-                    // PTT was already held and recording started — upgrade to hands-free
-                    // Recording continues, PTT release will be ignored
-                    logger.info("hands-free upgraded from ptt source=\(source, privacy: .public)")
-                } else {
-                    // Fresh hands-free start
-                    logger.info("hands-free started via combo source=\(source, privacy: .public)")
+                if !isPttKeyDown {
+                    // Fresh start (fn+Space pressed together quickly)
+                    logger.info("hands-free started source=\(source, privacy: .public)")
                     onHandsFreeToggle?(true)
+                } else {
+                    // PTT already started recording, upgrade to hands-free
+                    logger.info("hands-free upgraded from ptt source=\(source, privacy: .public)")
                 }
             }
+            // If already in hands-free, fn+Space does nothing — use fn alone to stop
             return
         }
+        if isComboKey { return } // debounced duplicate
 
         // Handle PTT key
         let pttPressed: Bool
