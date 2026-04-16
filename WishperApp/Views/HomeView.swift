@@ -55,25 +55,88 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Transcript List
+    // MARK: - Grouped Transcript List
+
+    private var groupedHistory: [(key: String, entries: [TranscriptEntry])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: appState.history) { entry in
+            RelativeDateLabel.label(for: entry.date, calendar: calendar)
+        }
+        // Preserve chronological order by sorting on the first entry's date in each group
+        return grouped
+            .map { (key: $0.key, entries: $0.value) }
+            .sorted { ($0.entries.first?.date ?? .distantPast) > ($1.entries.first?.date ?? .distantPast) }
+    }
 
     private var transcriptList: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(appState.history) { entry in
-                    TranscriptRow(
-                        entry: entry,
-                        onDelete: { appState.deleteFromHistory(id: entry.id) }
-                    )
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                ForEach(groupedHistory, id: \.key) { section in
+                    Section {
+                        ForEach(section.entries) { entry in
+                            TranscriptRow(
+                                entry: entry,
+                                onDelete: { appState.deleteFromHistory(id: entry.id) }
+                            )
 
-                    if entry.id != appState.history.last?.id {
-                        Divider()
-                            .padding(.leading, 72)
+                            if entry.id != section.entries.last?.id {
+                                Divider()
+                                    .padding(.leading, 72)
+                            }
+                        }
+                    } header: {
+                        SectionHeader(title: section.key)
                     }
                 }
             }
             .padding(.bottom, 24)
         }
+    }
+}
+
+// MARK: - Relative Date Labels
+
+private enum RelativeDateLabel {
+    static func label(for date: Date, calendar: Calendar) -> String {
+        if calendar.isDateInToday(date) {
+            return "Today"
+        } else if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        } else if isInCurrentWeek(date, calendar: calendar) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEEE" // "Monday", "Tuesday", etc.
+            return formatter.string(from: date)
+        } else if calendar.component(.year, from: date) == calendar.component(.year, from: Date()) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMMM d" // "April 13"
+            return formatter.string(from: date)
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMMM d, yyyy" // "December 5, 2025"
+            return formatter.string(from: date)
+        }
+    }
+
+    private static func isInCurrentWeek(_ date: Date, calendar: Calendar) -> Bool {
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: Date()) else { return false }
+        return weekInterval.contains(date)
+    }
+}
+
+// MARK: - Section Header
+
+private struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+            .background(.bar)
     }
 }
 
@@ -115,14 +178,12 @@ private struct TranscriptRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            // Timestamp — fixed width column
             Text(entry.date, format: .dateTime.hour().minute())
                 .font(.subheadline)
                 .foregroundStyle(.tertiary)
                 .monospacedDigit()
                 .frame(width: 52, alignment: .trailing)
 
-            // Transcript content
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayText)
                     .font(.body)
