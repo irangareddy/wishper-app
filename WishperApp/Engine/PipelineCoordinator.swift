@@ -237,17 +237,7 @@ final class PipelineCoordinator {
         logger.info("recording stopped")
         if appState.soundsEnabled { sounds.stopRecording() }
 
-        let silent = recorder.isSilent()
-        guard !silent else {
-            logger.info("silence fallback triggered")
-            appState.statusMessage = "No speech detected"
-            appState.addToHistory(raw: "Audio is silent.", cleaned: "Audio is silent.")
-            overlay.hide()
-            return
-        }
-
         isProcessing = true
-        let audio = recorder.getAudio()
         recorder.onAudioChunk = nil // stop feeding
 
         // Finish streaming transcription (only processes last incomplete segment)
@@ -306,7 +296,7 @@ final class PipelineCoordinator {
             if success {
                 appState.statusMessage = "Ready"
                 appState.addToHistory(raw: raw, cleaned: cleaned)
-                let duration = Double(audio.count) / 16000.0
+                let duration = recorder.duration
                 let appName = targetApp?.localizedName ?? "Unknown"
                 appState.stats.recordTranscription(text: cleaned, durationSeconds: duration, appName: appName)
                 overlay.show(state: .done)
