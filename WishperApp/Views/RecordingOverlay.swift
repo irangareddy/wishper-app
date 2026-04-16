@@ -30,7 +30,7 @@ struct RecordingOverlayPrompt: Equatable {
 // MARK: - Constants
 
 private enum ChipLayout {
-    static let width: CGFloat = 170    // doubled area, more breathing room
+    static let width: CGFloat = 120 
     static let height: CGFloat = 36    // doubled area, components stay same size
     static let cornerRadius: CGFloat = 18
 }
@@ -223,8 +223,10 @@ private struct OverlayContent: View {
                     .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
 
-            // Idle bar — always at the bottom
-            IdleChip(onTap: onTap, isActive: model.state != .idle)
+            // Idle bar — only visible when idle
+            if model.state == .idle {
+                IdleChip(onTap: onTap)
+            }
         }
         .frame(width: ChipLayout.width)
         .animation(reduceMotion ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: model.state)
@@ -257,13 +259,12 @@ private struct ChipBackground: View {
 
 private struct IdleChip: View {
     let onTap: () -> Void
-    var isActive: Bool = false
     @State private var isHovering = false
 
     var body: some View {
         VStack(spacing: 4) {
             // Hover suggestion appears ABOVE the bar on Y axis
-            if isHovering && !isActive {
+            if isHovering {
                 Button(action: onTap) {
                     HStack(spacing: 6) {
                         Text("Start recording")
@@ -287,7 +288,7 @@ private struct IdleChip: View {
 
             // Thin pill bar — always visible at the bottom
             Capsule()
-                .strokeBorder(Color.white.opacity(isActive ? 0.12 : (isHovering ? 0.4 : 0.25)), lineWidth: 2)
+                .strokeBorder(Color.white.opacity(isHovering ? 0.4 : 0.25), lineWidth: 2)
                 .frame(width: 36, height: 8)
                 .contentShape(Rectangle().size(width: ChipLayout.width, height: 20).offset(x: -67, y: -6))
                 .onTapGesture { onTap() }
@@ -353,7 +354,7 @@ private struct RecordingChip: View {
                 Image(systemName: "stop.circle.fill")
                     .font(.system(size: 18))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(.red)
                     .frame(width: 30, height: ChipLayout.height)
                     .contentShape(Rectangle())
             }
@@ -547,7 +548,7 @@ private struct PromptBubble: View {
 }
 
 #Preview("Idle Chip — Hover") {
-    IdleChip(onTap: {}, isActive: false)
+    IdleChip(onTap: {})
         .padding(40)
         .background(Color(white: 0.15))
 }
