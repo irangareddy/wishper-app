@@ -14,7 +14,7 @@ final class PipelineCoordinator {
     private let streamingTranscriber: StreamingTranscriber
     private let cleaner: Cleaner
     private let injector = TextInjector()
-    private let fnDetector = FnKeyDetector()
+    private let modifierDetector = ModifierKeyDetector()
     private let sounds = SoundPlayer()
     private var isHandsFreeActive = false
     private var isPushToTalkActive = false
@@ -116,8 +116,9 @@ final class PipelineCoordinator {
             Task { @MainActor in self?.pasteLastTranscript() }
         }
 
-        // ── fn key bonus (CGEventTap — also works as PTT + stop hands-free) ──
-        fnDetector.onFnDown = { [weak self] in
+        // ── Modifier key detector (fn, Right Command, etc.) ──
+        modifierDetector.configure(pttKey: appState.pushToTalkKey, cancelKey: appState.cancelKey)
+        modifierDetector.onPttDown = { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
                 if self.isHandsFreeActive {
@@ -129,17 +130,17 @@ final class PipelineCoordinator {
                 }
             }
         }
-        fnDetector.onFnUp = { [weak self] in
+        modifierDetector.onPttUp = { [weak self] in
             Task { @MainActor in
                 guard let self, self.isPushToTalkActive else { return }
                 self.isPushToTalkActive = false
                 await self.stopAndProcess()
             }
         }
-        fnDetector.onEsc = { [weak self] in
+        modifierDetector.onCancel = { [weak self] in
             Task { @MainActor in self?.cancelRecording() }
         }
-        fnDetector.start()
+        modifierDetector.start()
 
         logger.info("all shortcuts registered")
 
@@ -161,7 +162,12 @@ final class PipelineCoordinator {
 
         // Set chip position and update overlay hotkey label
         overlay.setPosition(appState.chipPosition)
-        overlay.setHotkeyLabel("fn")
+        let pttLabel = appState.pushToTalkKey == "fn" ? "fn" :
+                       appState.pushToTalkKey == "rightCommand" ? "⌘" :
+                       appState.pushToTalkKey == "rightOption" ? "⌥" :
+                       appState.pushToTalkKey == "rightControl" ? "⌃" :
+                       appState.pushToTalkKey == "rightShift" ? "⇧" : "fn"
+        overlay.setHotkeyLabel(pttLabel)
         logger.info("hotkeys registered: fn=PTT, ⌃Space=handsFree, ⌃⌘V=paste")
         showReadyPrompt()
         logger.info("keyboard shortcuts registered")
@@ -180,7 +186,7 @@ final class PipelineCoordinator {
     }
 
     func stop() {
-        fnDetector.stop()
+        modifierDetector.stop()
         KeyboardShortcuts.removeAllHandlers()
         recorder.stop()
         memoryMonitor.stopPolling()
@@ -389,7 +395,11 @@ final class PipelineCoordinator {
     }
 
     private func showReadyPrompt() {
-        let shortcutLabel = "fn"
+        let shortcutLabel = appState.pushToTalkKey == "fn" ? "fn" :
+                            appState.pushToTalkKey == "rightCommand" ? "Right ⌘" :
+                            appState.pushToTalkKey == "rightOption" ? "Right ⌥" :
+                            appState.pushToTalkKey == "rightControl" ? "Right ⌃" :
+                            appState.pushToTalkKey == "rightShift" ? "Right ⇧" : "fn"
         overlay.show(
             state: .readyPrompt,
             prompt: RecordingOverlayPrompt(

@@ -32,14 +32,24 @@ struct SettingsDetailView: View {
 
             // ── Shortcuts ──
             Section {
-                KeyboardShortcuts.Recorder("Push to talk", name: .pushToTalk)
+                Picker("Push to talk", selection: $appState.pushToTalkKey) {
+                    Text("fn").tag("fn")
+                    Text("Right Command ⌘").tag("rightCommand")
+                    Text("Right Option ⌥").tag("rightOption")
+                    Text("Right Control ⌃").tag("rightControl")
+                    Text("Right Shift ⇧").tag("rightShift")
+                }
                 KeyboardShortcuts.Recorder("Hands-free mode", name: .handsFree)
-                KeyboardShortcuts.Recorder("Cancel recording", name: .cancelRecording)
+                Picker("Cancel recording", selection: $appState.cancelKey) {
+                    Text("Escape ⎋").tag("esc")
+                    Text("fn").tag("fn")
+                    Text("⌘. (Command + Period)").tag("cmdPeriod")
+                }
                 KeyboardShortcuts.Recorder("Paste last transcript", name: .pasteLastTranscript)
             } header: {
                 Text("Shortcuts")
             } footer: {
-                Text("fn key also works for push-to-talk and stopping hands-free.")
+                Text("Push to talk: hold to record, release to transcribe. fn always works as a bonus trigger.")
             }
 
             // ── Appearance ──

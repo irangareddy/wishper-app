@@ -1,4 +1,5 @@
 @preconcurrency import ApplicationServices
+import Carbon
 import Cocoa
 import Foundation
 import OSLog
@@ -8,7 +9,7 @@ import OSLog
 nonisolated final class AccessibilityPermissionManager {
     var onPermissionChange: (() -> Void)?
 
-    private var cancellable: Any?
+    private var observer: Any?
 
     static func isGranted() -> Bool {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false] as NSDictionary
@@ -21,7 +22,7 @@ nonisolated final class AccessibilityPermissionManager {
     }
 
     init() {
-        self.cancellable = NotificationCenter.default.addObserver(
+        self.observer = NotificationCenter.default.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
             object: nil,
             queue: .main
@@ -31,41 +32,73 @@ nonisolated final class AccessibilityPermissionManager {
     }
 
     deinit {
-        if let observer = cancellable {
-            NotificationCenter.default.removeObserver(observer)
-        }
+        if let obs = observer { NotificationCenter.default.removeObserver(obs) }
     }
 }
 
-// MARK: - Fn Key Detector
+// MARK: - Modifier Key Detector
 
-/// Detects fn key press/release and Esc via CGEventTap (.defaultTap).
-/// Uses Input Monitoring permission (lighter than full Accessibility).
-/// Watches for permission changes and auto-reconnects.
-nonisolated final class FnKeyDetector: @unchecked Sendable {
+/// Detects modifier-only key press/release (fn, Right Command, etc.) and Esc.
+/// Uses CGEventTap (.defaultTap) with NSEvent conversion.
+/// Supports configurable PTT key and cancel key.
+nonisolated final class ModifierKeyDetector: @unchecked Sendable {
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "in.irangareddy.Wishper-App",
         category: "hotkeys"
     )
 
-    var onFnDown: (() -> Void)?
-    var onFnUp: (() -> Void)?
-    var onEsc: (() -> Void)?
+    // Callbacks
+    var onPttDown: (() -> Void)?
+    var onPttUp: (() -> Void)?
+    var onCancel: (() -> Void)?
+
+    // Configurable keys
+    var pttKeyCode: UInt16 = 63           // fn
+    var pttModifierFlag: NSEvent.ModifierFlags = .function
+    var cancelKeyCode: UInt16 = 53        // Esc
+    var cancelUsesCmdPeriod = false        // ⌘. mode
 
     private var eventTap: CFMachPort?
-    private var isFnDown = false
+    private var isPttDown = false
     private let permissionManager = AccessibilityPermissionManager()
+
+    /// Map key name strings to (keyCode, modifierFlag)
+    static let keyMap: [String: (keyCode: UInt16, flag: NSEvent.ModifierFlags)] = [
+        "fn":           (63, .function),
+        "rightCommand": (54, .command),
+        "rightOption":  (61, .option),
+        "rightControl": (62, .control),
+        "rightShift":   (60, .shift),
+    ]
+
+    func configure(pttKey: String, cancelKey: String) {
+        if let mapping = Self.keyMap[pttKey] {
+            pttKeyCode = mapping.keyCode
+            pttModifierFlag = mapping.flag
+        }
+
+        if cancelKey == "cmdPeriod" {
+            cancelKeyCode = 47 // kVK_ANSI_Period
+            cancelUsesCmdPeriod = true
+        } else if cancelKey == "fn" {
+            // fn as cancel — handled separately via flagsChanged
+            cancelKeyCode = 63
+            cancelUsesCmdPeriod = false
+        } else {
+            cancelKeyCode = 53 // Esc
+            cancelUsesCmdPeriod = false
+        }
+
+        logger.info("configured ptt=\(pttKey) cancel=\(cancelKey)")
+    }
 
     func start() {
         permissionManager.onPermissionChange = { [weak self] in
-            // Small delay for system database to update
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 guard let self else { return }
                 if AccessibilityPermissionManager.isGranted() {
-                    self.logger.info("permission granted — starting tap")
                     self.createTap()
                 } else {
-                    self.logger.warning("permission revoked — removing tap")
                     self.destroyTap()
                 }
             }
@@ -74,7 +107,6 @@ nonisolated final class FnKeyDetector: @unchecked Sendable {
         if AccessibilityPermissionManager.isGranted() {
             createTap()
         } else {
-            logger.warning("accessibility not granted — requesting")
             AccessibilityPermissionManager.requestPermission()
         }
     }
@@ -96,7 +128,7 @@ nonisolated final class FnKeyDetector: @unchecked Sendable {
 
         let callback: CGEventTapCallBack = { (proxy, type, event, refcon) in
             guard let refcon else { return Unmanaged.passUnretained(event) }
-            let detector = Unmanaged<FnKeyDetector>.fromOpaque(refcon).takeUnretainedValue()
+            let detector = Unmanaged<ModifierKeyDetector>.fromOpaque(refcon).takeUnretainedValue()
             return detector.handleEvent(type: type, event: event)
         }
 
@@ -108,70 +140,69 @@ nonisolated final class FnKeyDetector: @unchecked Sendable {
             callback: callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            logger.error("failed to create event tap — check Input Monitoring permission")
+            logger.error("failed to create event tap")
             return
         }
 
         self.eventTap = tap
-
-        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
-
-        logger.info("fn key detector started (.defaultTap)")
+        logger.info("modifier key detector started")
     }
 
     private func destroyTap() {
         guard let tap = eventTap else { return }
         CGEvent.tapEnable(tap: tap, enable: false)
         eventTap = nil
-        isFnDown = false
+        isPttDown = false
     }
 
     // MARK: - Event Handling
 
     private func handleEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        // Re-enable tap if system disabled it
+        // Re-enable if system disabled
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
-                logger.info("tap re-enabled after system disable")
             }
             return Unmanaged.passUnretained(event)
         }
 
-        // Convert to NSEvent for cleaner processing
         guard let nsEvent = NSEvent(cgEvent: event) else {
             return Unmanaged.passUnretained(event)
         }
 
-        let keyCode = nsEvent.keyCode
+        // Cancel: Esc key or ⌘.
+        if nsEvent.type == .keyDown {
+            if cancelUsesCmdPeriod {
+                if nsEvent.keyCode == 47 && nsEvent.modifierFlags.contains(.command) {
+                    onCancel?()
+                    return Unmanaged.passUnretained(event)
+                }
+            } else if nsEvent.keyCode == cancelKeyCode {
+                onCancel?()
+                return Unmanaged.passUnretained(event)
+            }
+        }
 
-        // Esc (keyDown) → cancel
-        if nsEvent.type == .keyDown, keyCode == 53 {
-            onEsc?()
-            // Return event so Esc still works in other apps
+        // PTT modifier key (flagsChanged)
+        guard nsEvent.type == .flagsChanged, nsEvent.keyCode == pttKeyCode else {
             return Unmanaged.passUnretained(event)
         }
 
-        // fn key (flagsChanged, keyCode 63)
-        guard nsEvent.type == .flagsChanged, keyCode == 63 else {
+        let pressed = nsEvent.modifierFlags.contains(pttModifierFlag)
+        guard pressed != isPttDown else {
             return Unmanaged.passUnretained(event)
         }
+        isPttDown = pressed
 
-        let fnPressed = nsEvent.modifierFlags.contains(.function)
-        guard fnPressed != isFnDown else {
-            return Unmanaged.passUnretained(event)
-        }
-        isFnDown = fnPressed
-
-        if fnPressed {
-            onFnDown?()
+        if pressed {
+            onPttDown?()
         } else {
-            onFnUp?()
+            onPttUp?()
         }
 
-        // Return event so fn still works for other apps
         return Unmanaged.passUnretained(event)
     }
 }
