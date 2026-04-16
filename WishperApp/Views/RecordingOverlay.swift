@@ -250,7 +250,7 @@ private struct ChipBackground: View {
             )
             .overlay {
                 Capsule()
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                    .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
             }
     }
 }
@@ -288,7 +288,7 @@ private struct IdleChip: View {
 
             // Thin pill bar — always visible at the bottom
             Capsule()
-                .strokeBorder(Color.white.opacity(isHovering ? 0.4 : 0.25), lineWidth: 2)
+                .strokeBorder(Color.white.opacity(isHovering ? 0.5 : 0.35), lineWidth: 1)
                 .frame(width: 36, height: 8)
                 .contentShape(Rectangle().size(width: ChipLayout.width, height: 20).offset(x: -67, y: -6))
                 .onTapGesture { onTap() }
