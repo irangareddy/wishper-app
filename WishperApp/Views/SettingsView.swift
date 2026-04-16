@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
 
@@ -43,12 +44,9 @@ struct SettingsDetailView: View {
                 }
 
                 settingsSection("Shortcuts") {
-                    recordableShortcutRow("Push to talk", configuration: $appState.hotkeyConfig)
-                    pickerShortcutRow("Hands-free mode", selection: handsFreeBinding, options: [
-                        ("fn Space", HotkeyConfiguration.fnSpace),
-                        ("⇧⌘ Space", HotkeyConfiguration.shiftCommandSpace),
-                    ])
-                    shortcutRow("Paste last transcript", symbol: "⌃⌘V")
+                    recorderRow("Push to talk", name: .pushToTalk)
+                    recorderRow("Hands-free mode", name: .handsFree)
+                    recorderRow("Paste last transcript", name: .pasteLastTranscript)
                     shortcutRow("Cancel recording", symbol: "⎋")
                 }
 
@@ -230,29 +228,13 @@ struct SettingsDetailView: View {
         .padding(.vertical, 6)
     }
 
-    /// Recordable shortcut — shows current key or "Record Shortcut"
-    private func recordableShortcutRow(_ label: String, configuration: Binding<HotkeyConfiguration>) -> some View {
+    /// KeyboardShortcuts.Recorder row — proper shortcut recording
+    private func recorderRow(_ label: String, name: KeyboardShortcuts.Name) -> some View {
         HStack {
             Text(label)
             Spacer()
-            ShortcutRecorderView(configuration: configuration)
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 6)
-    }
-
-    /// Picker-based shortcut — dropdown for predefined combos
-    private func pickerShortcutRow(_ label: String, selection: Binding<HotkeyConfiguration>, options: [(String, HotkeyConfiguration)]) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Picker("", selection: selection) {
-                ForEach(Array(options.enumerated()), id: \.offset) { _, opt in
-                    Text(opt.0).tag(opt.1)
-                }
-            }
-            .labelsHidden()
-            .frame(maxWidth: 140)
+            KeyboardShortcuts.Recorder(for: name)
+                .frame(maxWidth: 160)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 6)
@@ -337,16 +319,6 @@ struct SettingsDetailView: View {
             set: { newValue in
                 appState.chipPosition = newValue
                 appState.coordinator?.setChipPosition(newValue)
-            }
-        )
-    }
-
-    private var handsFreeBinding: Binding<HotkeyConfiguration> {
-        Binding(
-            get: { appState.handsFreeConfig },
-            set: { newValue in
-                appState.handsFreeConfig = newValue
-                appState.coordinator?.switchHotkeyMode()
             }
         )
     }

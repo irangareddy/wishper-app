@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import KeyboardShortcuts
 import MLX
 import OSLog
 
@@ -13,8 +14,8 @@ final class PipelineCoordinator {
     private let streamingTranscriber: StreamingTranscriber
     private let cleaner: Cleaner
     private let injector = TextInjector()
-    private let hotkeyManager = HotkeyManager()
     private let sounds = SoundPlayer()
+    private var isHandsFreeActive = false
     private let overlay = RecordingOverlayController()
 
     private var isProcessing = false
@@ -74,29 +75,36 @@ final class PipelineCoordinator {
         }
         memoryMonitor.startPolling()
 
-        // Set up hotkey callbacks
-        hotkeyManager.onRecordingStart = { [weak self] in
+        // Push to talk: key down → start, key up → stop
+        KeyboardShortcuts.onKeyDown(for: .pushToTalk) { [weak self] in
             Task { @MainActor in
                 self?.startRecording()
             }
         }
-        hotkeyManager.onRecordingStop = { [weak self] in
+        KeyboardShortcuts.onKeyUp(for: .pushToTalk) { [weak self] in
             Task { @MainActor in
                 await self?.stopAndProcess()
             }
         }
-        hotkeyManager.onCancel = { [weak self] in
+
+        // Hands-free: toggle on key up
+        KeyboardShortcuts.onKeyUp(for: .handsFree) { [weak self] in
             Task { @MainActor in
-                self?.cancelRecording()
+                guard let self else { return }
+                if self.recorder.isRecording {
+                    self.isHandsFreeActive = false
+                    await self.stopAndProcess()
+                } else {
+                    self.isHandsFreeActive = true
+                    self.startRecording()
+                }
             }
         }
-        hotkeyManager.onHandsFreeToggle = { [weak self] shouldStart in
+
+        // Paste last transcript
+        KeyboardShortcuts.onKeyUp(for: .pasteLastTranscript) { [weak self] in
             Task { @MainActor in
-                if shouldStart {
-                    self?.startRecording()
-                } else {
-                    await self?.stopAndProcess()
-                }
+                self?.pasteLastTranscript()
             }
         }
 
@@ -116,17 +124,12 @@ final class PipelineCoordinator {
             self?.undoCancel()
         }
 
-        // Wire global paste last transcript (Ctrl+Cmd+V)
-        hotkeyManager.onPasteLastTranscript = { [weak self] in
-            Task { @MainActor in
-                self?.pasteLastTranscript()
-            }
-        }
-
-        // Set chip position and show idle
+        // Set chip position and update overlay hotkey label
         overlay.setPosition(appState.chipPosition)
-        overlay.setHotkeyLabel(appState.hotkeyConfig.displayString)
-        startHotkeys()
+        let shortcutLabel = KeyboardShortcuts.getShortcut(for: .pushToTalk)?.description ?? "⌘⇧R"
+        overlay.setHotkeyLabel(shortcutLabel)
+        showReadyPrompt()
+        logger.info("keyboard shortcuts registered")
     }
 
     func setChipPosition(_ position: ChipPosition) {
@@ -141,27 +144,8 @@ final class PipelineCoordinator {
         logger.info("paste last transcript success=\(success)")
     }
 
-    func switchHotkeyMode() {
-        hotkeyManager.stop()
-        startHotkeys()
-    }
-
-    private func startHotkeys() {
-        let pttConfig = appState.hotkeyConfig
-        let hfConfig = appState.handsFreeConfig
-
-        hotkeyManager.startDualMode(
-            pttKeyCode: pttConfig.keyCode,
-            pttModifiers: pttConfig.modifierFlags,
-            handsFreeKeyCode: hfConfig.keyCode,
-            handsFreeModifiers: hfConfig.modifierFlags
-        )
-        logger.info("dual hotkey mode started ptt=\(pttConfig.displayString, privacy: .public) handsFree=\(hfConfig.displayString, privacy: .public)")
-        showReadyPrompt(for: pttConfig)
-    }
-
     func stop() {
-        hotkeyManager.stop()
+        KeyboardShortcuts.removeAllHandlers()
         recorder.stop()
         memoryMonitor.stopPolling()
         appState.isRecording = false
@@ -368,12 +352,13 @@ final class PipelineCoordinator {
         startRecording()
     }
 
-    private func showReadyPrompt(for config: HotkeyConfiguration) {
+    private func showReadyPrompt() {
+        let shortcutLabel = KeyboardShortcuts.getShortcut(for: .pushToTalk)?.description ?? "⌘⇧R"
         overlay.show(
             state: .readyPrompt,
             prompt: RecordingOverlayPrompt(
-                prefix: "Tap mic or hold ",
-                hotkey: config.displayString,
+                prefix: "Hold ",
+                hotkey: shortcutLabel,
                 suffix: " to dictate"
             )
         )
@@ -418,12 +403,4 @@ final class PipelineCoordinator {
         targetApp?.localizedName ?? "Unknown"
     }
 
-    private func modeDescription(_ mode: HotkeyManager.HotkeyMode) -> String {
-        switch mode {
-        case .pushToTalk:
-            "pushToTalk"
-        case .toggle:
-            "toggle"
-        }
-    }
 }

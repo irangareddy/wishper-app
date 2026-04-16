@@ -27,9 +27,6 @@ final class AppState: ObservableObject {
     @Published var selectedLLMModel = "mlx-community/Qwen3-0.6B-4bit"
     @Published var cleanupEnabled = false
     @Published var transcriptionLanguage = "en"
-    @Published var hotkeyMode = "push_to_talk"
-    @Published var hotkeyConfig = HotkeyConfiguration.rightCommand
-    @Published var handsFreeConfig = HotkeyConfiguration.fnSpace
     @Published var soundsEnabled = true
     @Published var chipPosition: ChipPosition = .belowNotch
     @Published var statusMessage = "Ready"
