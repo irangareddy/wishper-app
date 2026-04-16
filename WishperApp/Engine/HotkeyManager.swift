@@ -1,135 +1,168 @@
-import Carbon
+@preconcurrency import ApplicationServices
 import Cocoa
 import Foundation
 import OSLog
 
-/// Minimal fn-key detector via CGEventTap.
-/// Only handles fn press/release (flagsChanged). Everything else uses KeyboardShortcuts.
-/// Includes a watchdog timer that re-enables the tap if macOS disables it.
-@MainActor
-final class FnKeyDetector {
-    private let logger = WishperLog.voicePipeline
+// MARK: - Accessibility Permission Manager
 
-    nonisolated(unsafe) var onFnDown: (() -> Void)?
-    nonisolated(unsafe) var onFnUp: (() -> Void)?
-    nonisolated(unsafe) var onEsc: (() -> Void)?
+nonisolated final class AccessibilityPermissionManager {
+    var onPermissionChange: (() -> Void)?
 
-    nonisolated(unsafe) private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
-    nonisolated(unsafe) private var isFnDown = false
-    private var watchdogTask: Task<Void, Never>?
+    private var cancellable: Any?
+
+    static func isGranted() -> Bool {
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false] as NSDictionary
+        return AXIsProcessTrustedWithOptions(options)
+    }
+
+    static func requestPermission() {
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as NSDictionary
+        AXIsProcessTrustedWithOptions(options)
+    }
+
+    init() {
+        self.cancellable = NotificationCenter.default.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.onPermissionChange?()
+        }
+    }
+
+    deinit {
+        if let observer = cancellable {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+}
+
+// MARK: - Fn Key Detector
+
+/// Detects fn key press/release and Esc via CGEventTap (.defaultTap).
+/// Uses Input Monitoring permission (lighter than full Accessibility).
+/// Watches for permission changes and auto-reconnects.
+nonisolated final class FnKeyDetector: @unchecked Sendable {
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "in.irangareddy.Wishper-App",
+        category: "hotkeys"
+    )
+
+    var onFnDown: (() -> Void)?
+    var onFnUp: (() -> Void)?
+    var onEsc: (() -> Void)?
+
+    private var eventTap: CFMachPort?
+    private var isFnDown = false
+    private let permissionManager = AccessibilityPermissionManager()
 
     func start() {
-        createTap()
-        startWatchdog()
+        permissionManager.onPermissionChange = { [weak self] in
+            // Small delay for system database to update
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard let self else { return }
+                if AccessibilityPermissionManager.isGranted() {
+                    self.logger.info("permission granted — starting tap")
+                    self.createTap()
+                } else {
+                    self.logger.warning("permission revoked — removing tap")
+                    self.destroyTap()
+                }
+            }
+        }
+
+        if AccessibilityPermissionManager.isGranted() {
+            createTap()
+        } else {
+            logger.warning("accessibility not granted — requesting")
+            AccessibilityPermissionManager.requestPermission()
+        }
     }
 
     func stop() {
-        watchdogTask?.cancel()
-        watchdogTask = nil
         destroyTap()
+        permissionManager.onPermissionChange = nil
     }
 
     // MARK: - Event Tap
 
     private func createTap() {
-        destroyTap()
+        guard eventTap == nil else { return }
 
-        let mask: CGEventMask =
+        let eventMask = CGEventMask(
             (1 << CGEventType.flagsChanged.rawValue) |
             (1 << CGEventType.keyDown.rawValue)
+        )
+
+        let callback: CGEventTapCallBack = { (proxy, type, event, refcon) in
+            guard let refcon else { return Unmanaged.passUnretained(event) }
+            let detector = Unmanaged<FnKeyDetector>.fromOpaque(refcon).takeUnretainedValue()
+            return detector.handleEvent(type: type, event: event)
+        }
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: mask,
-            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
-                guard let refcon else { return Unmanaged.passRetained(event) }
-                let detector = Unmanaged<FnKeyDetector>.fromOpaque(refcon).takeUnretainedValue()
-                detector.handleEvent(type: type, event: event)
-                return Unmanaged.passUnretained(event)
-            },
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            logger.error("fn key event tap creation failed — check Accessibility permission")
+            logger.error("failed to create event tap — check Input Monitoring permission")
             return
         }
 
         self.eventTap = tap
-        self.runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        if let source = runLoopSource {
-            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        }
+
+        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
-        logger.info("fn key detector started")
+
+        logger.info("fn key detector started (.defaultTap)")
     }
 
     private func destroyTap() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let source = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-        }
+        guard let tap = eventTap else { return }
+        CGEvent.tapEnable(tap: tap, enable: false)
         eventTap = nil
-        runLoopSource = nil
         isFnDown = false
-    }
-
-    // MARK: - Watchdog (re-enables tap if macOS disables it)
-
-    private func startWatchdog() {
-        watchdogTask?.cancel()
-        watchdogTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
-                guard let self, let tap = self.eventTap else { continue }
-
-                if !CGEvent.tapIsEnabled(tap: tap) {
-                    self.logger.warning("fn key tap was disabled — re-enabling")
-                    CGEvent.tapEnable(tap: tap, enable: true)
-                }
-
-                // If tap was completely destroyed, recreate it
-                if self.eventTap == nil {
-                    if AXIsProcessTrusted() {
-                        self.logger.warning("fn key tap lost — recreating")
-                        self.createTap()
-                    } else {
-                        self.logger.warning("fn key tap lost — Accessibility permission missing")
-                        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
-                        AXIsProcessTrustedWithOptions(options)
-                    }
-                }
-            }
-        }
     }
 
     // MARK: - Event Handling
 
-    nonisolated private func handleEvent(type: CGEventType, event: CGEvent) {
-        // Re-enable tap immediately if system disabled it
+    private func handleEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        // Re-enable tap if system disabled it
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
+                logger.info("tap re-enabled after system disable")
             }
-            return
+            return Unmanaged.passUnretained(event)
         }
 
-        let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+        // Convert to NSEvent for cleaner processing
+        guard let nsEvent = NSEvent(cgEvent: event) else {
+            return Unmanaged.passUnretained(event)
+        }
+
+        let keyCode = nsEvent.keyCode
 
         // Esc (keyDown) → cancel
-        if type == .keyDown, keyCode == 53 {
+        if nsEvent.type == .keyDown, keyCode == 53 {
             onEsc?()
-            return
+            // Return event so Esc still works in other apps
+            return Unmanaged.passUnretained(event)
         }
 
         // fn key (flagsChanged, keyCode 63)
-        guard type == .flagsChanged, keyCode == 63 else { return }
+        guard nsEvent.type == .flagsChanged, keyCode == 63 else {
+            return Unmanaged.passUnretained(event)
+        }
 
-        let fnPressed = event.flags.contains(.maskSecondaryFn)
-        guard fnPressed != isFnDown else { return } // dedup
+        let fnPressed = nsEvent.modifierFlags.contains(.function)
+        guard fnPressed != isFnDown else {
+            return Unmanaged.passUnretained(event)
+        }
         isFnDown = fnPressed
 
         if fnPressed {
@@ -137,5 +170,8 @@ final class FnKeyDetector {
         } else {
             onFnUp?()
         }
+
+        // Return event so fn still works for other apps
+        return Unmanaged.passUnretained(event)
     }
 }
