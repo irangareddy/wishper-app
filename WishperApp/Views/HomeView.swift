@@ -230,6 +230,7 @@ private struct TranscriptRow: View {
         .padding(.horizontal, 20)
         .contentShape(Rectangle())
         .background(isHovering ? Color.primary.opacity(0.03) : Color.clear)
+        .animation(.easeOut(duration: 0.1), value: isHovering)
         .onHover { isHovering = $0 }
         .contextMenu { contextMenuContent }
     }

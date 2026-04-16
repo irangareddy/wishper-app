@@ -30,9 +30,9 @@ struct RecordingOverlayPrompt: Equatable {
 // MARK: - Constants
 
 private enum ChipLayout {
-    static let width: CGFloat = 196    // panel width (accommodates hover suggestion)
-    static let height: CGFloat = 28    // chip height (compact pills)
-    static let cornerRadius: CGFloat = 14
+    static let width: CGFloat = 120    // compact chip width
+    static let height: CGFloat = 26    // compact chip height
+    static let cornerRadius: CGFloat = 13
 }
 
 // MARK: - Model
@@ -193,6 +193,7 @@ final class RecordingOverlayController {
 
 private struct OverlayContent: View {
     @ObservedObject var model: RecordingOverlayModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var onTap: () -> Void
     var onStop: () -> Void
     var onCancel: () -> Void
@@ -204,28 +205,29 @@ private struct OverlayContent: View {
             switch model.state {
             case .idle:
                 EmptyView()
+                    .transition(.opacity)
             case .readyPrompt:
                 ReadyPromptChip(prompt: model.prompt)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             case .recording:
-                RecordingChip(levels: model.levels, onCancel: onCancel, onStop: onStop)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                RecordingChip(levels: model.levels, onCancel: onCancel, onStop: onStop, reduceMotion: reduceMotion)
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
             case .transcribing, .cleaning:
-                ProcessingChip()
+                ProcessingChip(reduceMotion: reduceMotion)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             case .done:
                 DoneChip()
-                    .transition(.opacity)
+                    .transition(.opacity.animation(.easeOut(duration: 0.4)))
             case .cancelled:
                 CancelledChip(onUndo: onUndo)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
 
             // Idle bar — always at the bottom
             IdleChip(onTap: onTap, isActive: model.state != .idle)
         }
         .frame(width: ChipLayout.width)
-        .animation(.snappy(duration: 0.2), value: model.state)
+        .animation(reduceMotion ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: model.state)
     }
 }
 
@@ -286,7 +288,7 @@ private struct IdleChip: View {
             // Thin bar — always visible at the bottom
             Capsule()
                 .fill(Color.white.opacity(isActive ? 0.15 : (isHovering ? 0.45 : 0.3)))
-                .frame(width: 50, height: 4)
+                .frame(width: 36, height: 4)
                 .contentShape(Rectangle().size(width: ChipLayout.width, height: 20).offset(x: -73, y: -8))
                 .onTapGesture { onTap() }
         }
@@ -330,26 +332,29 @@ private struct RecordingChip: View {
     let levels: [CGFloat]
     let onCancel: () -> Void
     let onStop: () -> Void
+    var reduceMotion: Bool = false
 
     var body: some View {
         HStack(spacing: 0) {
             Button(action: onCancel) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .frame(width: 36, height: ChipLayout.height)
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 30, height: ChipLayout.height)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            RecordingLevelBars(levels: levels)
+            RecordingLevelBars(levels: levels, reduceMotion: reduceMotion)
                 .frame(maxWidth: .infinity)
 
             Button(action: onStop) {
-                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(.white.opacity(0.8))
-                    .frame(width: 10, height: 10)
-                    .frame(width: 36, height: ChipLayout.height)
+                Image(systemName: "stop.circle.fill")
+                    .font(.system(size: 14))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 30, height: ChipLayout.height)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -363,8 +368,10 @@ private struct RecordingChip: View {
 // MARK: - Processing Chip
 
 private struct ProcessingChip: View {
+    var reduceMotion: Bool = false
+
     var body: some View {
-        SlowActivityBars(baseHeights: [4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4])
+        SlowActivityBars(baseHeights: [4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4], reduceMotion: reduceMotion)
             .frame(width: ChipLayout.width, height: ChipLayout.height)
             .background(ChipBackground())
             .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
@@ -423,7 +430,7 @@ private struct CancelledChip: View {
         .background(ChipBackground())
         .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
         .onAppear {
-            withAnimation(.linear(duration: 3.0)) {
+            withAnimation(.easeIn(duration: 3.0)) {
                 progress = 0.0
             }
         }
@@ -434,6 +441,7 @@ private struct CancelledChip: View {
 
 private struct RecordingLevelBars: View {
     let levels: [CGFloat]
+    var reduceMotion: Bool = false
 
     var body: some View {
         let emphasis: [CGFloat] = [0.58, 0.68, 0.80, 0.92, 1.02, 1.08, 1.02, 0.92, 0.80, 0.68, 0.58]
@@ -452,7 +460,12 @@ private struct RecordingLevelBars: View {
             }
         }
         .frame(height: 16)
-        .animation(.interactiveSpring(response: 0.12, dampingFraction: 0.84, blendDuration: 0.06), value: resolvedLevels)
+        .animation(
+            reduceMotion
+                ? .easeOut(duration: 0.1)
+                : .interactiveSpring(response: 0.12, dampingFraction: 0.84, blendDuration: 0.06),
+            value: resolvedLevels
+        )
     }
 
     private var normalizedLevels: [CGFloat] {
@@ -466,6 +479,7 @@ private struct RecordingLevelBars: View {
 
 private struct SlowActivityBars: View {
     let baseHeights: [CGFloat]
+    var reduceMotion: Bool = false
     @State private var animate = false
 
     var body: some View {
@@ -481,7 +495,9 @@ private struct SlowActivityBars: View {
                     )
                     .scaleEffect(y: animate ? 1.0 : 0.82, anchor: .center)
                     .animation(
-                        .easeInOut(duration: 0.38).repeatForever(autoreverses: true).delay(delay),
+                        reduceMotion
+                            ? .easeOut(duration: 0.1).repeatForever(autoreverses: true).delay(delay)
+                            : .easeInOut(duration: 0.5).repeatForever(autoreverses: true).delay(delay),
                         value: animate
                     )
             }
