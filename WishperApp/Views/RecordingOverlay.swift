@@ -30,9 +30,9 @@ struct RecordingOverlayPrompt: Equatable {
 // MARK: - Constants
 
 private enum ChipLayout {
-    static let width: CGFloat = 120    // compact chip width
-    static let height: CGFloat = 26    // compact chip height
-    static let cornerRadius: CGFloat = 13
+    static let width: CGFloat = 170    // doubled area, more breathing room
+    static let height: CGFloat = 36    // doubled area, components stay same size
+    static let cornerRadius: CGFloat = 18
 }
 
 // MARK: - Model
