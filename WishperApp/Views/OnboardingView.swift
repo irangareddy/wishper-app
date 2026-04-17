@@ -101,9 +101,8 @@ struct OnboardingView: View {
                 Spacer().frame(height: 20)
             }
         }
-        .frame(width: 400, height: 420)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(white: 0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissions()
         }
@@ -115,18 +114,20 @@ struct OnboardingView: View {
     // MARK: - Shader Background
 
     private var shaderBackground: some View {
-        TimelineView(.animation) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-            Rectangle()
-                .fill(Color(white: 0.08))
-                .colorEffect(
-                    ShaderLibrary.gradientWave(
-                        .float2(400, 420),
-                        .float(Float(time))
+        GeometryReader { geo in
+            TimelineView(.animation) { context in
+                let time = context.date.timeIntervalSinceReferenceDate
+                Rectangle()
+                    .fill(Color(white: 0.04))
+                    .colorEffect(
+                        ShaderLibrary.gradientWave(
+                            .float2(Float(geo.size.width), Float(geo.size.height)),
+                            .float(Float(time))
+                        )
                     )
-                )
-                .opacity(0.5)
+            }
         }
+        .ignoresSafeArea()
     }
 
     // MARK: - Checklist Row
