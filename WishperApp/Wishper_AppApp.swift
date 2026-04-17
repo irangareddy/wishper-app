@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import OSLog
 import SwiftUI
 
@@ -11,6 +12,14 @@ struct WishperApp: App {
     @Environment(\.openWindow) private var openWindow
     @AppStorage("onboardingCompleted") private var onboardingCompleted = false
     @State private var needsOnboarding = false
+
+    /// Setup is complete only when onboarding was done AND all requirements are still met
+    private var isSetupComplete: Bool {
+        onboardingCompleted
+            && AXIsProcessTrusted()
+            && AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+            && appState.modelPreparationPhase == .ready
+    }
 
     var body: some Scene {
         MenuBarExtra {
@@ -46,7 +55,7 @@ struct WishperApp: App {
         }
 
         Window("Wishper", id: "main") {
-            if onboardingCompleted {
+            if isSetupComplete {
                 MainWindowView(appState: appState)
             } else {
                 OnboardingView(appState: appState) {
@@ -56,7 +65,7 @@ struct WishperApp: App {
                 }
             }
         }
-        .defaultSize(width: onboardingCompleted ? 660 : 400, height: onboardingCompleted ? 500 : 420)
+        .defaultSize(width: isSetupComplete ? 660 : 400, height: isSetupComplete ? 500 : 420)
         .windowResizability(.contentMinSize)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
@@ -81,7 +90,10 @@ struct WishperApp: App {
             await coord.start(promptForHotkeyPermissions: onboardingWasCompleted)
         }
 
-        if !onboardingWasCompleted {
+        // Show onboarding whenever any requirement is unmet
+        let accessOk = AXIsProcessTrusted()
+        let micOk = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        if !onboardingWasCompleted || !accessOk || !micOk {
             needsOnboarding = true
         }
     }
