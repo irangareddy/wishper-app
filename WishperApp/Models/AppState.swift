@@ -16,6 +16,13 @@ struct TranscriptEntry: Codable, Identifiable {
     }
 }
 
+enum ModelPreparationPhase: String {
+    case idle
+    case preparing
+    case ready
+    case failed
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var isRecording = false
@@ -43,6 +50,12 @@ final class AppState: ObservableObject {
     @Published var soundsEnabled = true
     @Published var chipPosition: ChipPosition = .belowNotch
     @Published var statusMessage = "Ready"
+    @Published var microphonePermissionGranted = false
+    @Published var modelPreparationPhase: ModelPreparationPhase = .idle
+    @Published var modelPreparationProgress = 0.0
+    @Published var modelPreparationHeadline = "Preparing Wishper"
+    @Published var modelPreparationDetail = "Wishper downloads required local speech models before first use."
+    @Published var modelPreparationError: String?
     @Published var liveTranscript = ""
     @Published var recordingStartedAt: Date?
     let stats = StatsTracker()
@@ -64,6 +77,10 @@ final class AppState: ObservableObject {
         self.pushToTalkKey = ud.string(forKey: "pushToTalkKey") ?? "fn"
         self.cancelKey = ud.string(forKey: "cancelKey") ?? "esc"
         loadHistory()
+    }
+
+    var isModelPreparationReady: Bool {
+        modelPreparationPhase == .ready
     }
 
     func addToHistory(raw: String, cleaned: String) {
