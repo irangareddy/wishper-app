@@ -45,8 +45,14 @@ struct WishperApp: App {
             if onboardingCompleted {
                 MainWindowView(appState: appState)
             } else {
-                OnboardingView {
+                OnboardingView(
+                    appState: appState,
+                    onRetryPreparation: { coordinator?.retryPreparation() }
+                ) {
                     onboardingCompleted = true
+                    if appState.microphonePermissionGranted, appState.isModelPreparationReady {
+                        appState.statusMessage = "Ready"
+                    }
                     coordinator?.reevaluateHotkeyPermissions(promptForPermissions: false)
                 }
             }
