@@ -6,6 +6,7 @@ struct MenuBarMenu: View {
     @ObservedObject var appState: AppState
     var onOpenWindow: () -> Void = {}
     @State private var currentTime = Date()
+    @State private var injector = TextInjector()
 
     var body: some View {
         // Primary actions
@@ -80,12 +81,8 @@ struct MenuBarMenu: View {
 
     private func pasteLastTranscript() {
         guard !appState.lastCleanedText.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(appState.lastCleanedText, forType: .string)
-        let script = NSAppleScript(source: """
-            tell application "System Events" to keystroke "v" using command down
-        """)
-        script?.executeAndReturnError(nil)
+        let targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        _ = injector.inject(appState.lastCleanedText, targetPID: targetPID)
     }
 }
 
