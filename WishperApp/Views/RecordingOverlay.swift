@@ -172,7 +172,6 @@ final class RecordingOverlayController {
     private func positionPanel() {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? .zero
-        let screenFrame = screen?.frame ?? .zero
         let w = ChipLayout.windowWidth
         let h = ChipLayout.windowHeight
         let x = visibleFrame.midX - (w / 2)

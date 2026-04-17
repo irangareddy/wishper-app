@@ -2,11 +2,28 @@ import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
 
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system = "System"
+    case light = "Light"
+    case dark = "Dark"
+
+    var id: String { rawValue }
+
+    var appearance: NSAppearance? {
+        switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 // MARK: - Settings
 
 struct SettingsDetailView: View {
     @ObservedObject var appState: AppState
     @AppStorage("launchAtLoginEnabled") private var launchAtLoginEnabled = false
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .dark
     @State private var launchAtLoginError: String?
     @State private var showAdvanced = false
     @State private var hotkeyPermissionState = HotkeyPermissionGuide.currentState()
@@ -72,6 +89,11 @@ struct SettingsDetailView: View {
 
             // ── Appearance ──
             Section {
+                Picker("Appearance", selection: $appearanceMode) {
+                    ForEach(AppearanceMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
                 Picker("Chip position", selection: chipPositionBinding) {
                     ForEach(ChipPosition.allCases) { p in
                         Text(p.rawValue).tag(p)
@@ -85,6 +107,8 @@ struct SettingsDetailView: View {
                 }
             } header: {
                 Text("Appearance")
+            } footer: {
+                Text("The overlay chip may be hard to see on light backgrounds in Light mode.")
             }
 
             // ── Advanced ──
@@ -170,6 +194,10 @@ struct SettingsDetailView: View {
         .onAppear {
             syncLaunchAtLoginState()
             refreshPermissionState()
+            NSApp.appearance = appearanceMode.appearance
+        }
+        .onChange(of: appearanceMode) { _, newValue in
+            NSApp.appearance = newValue.appearance
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionState()

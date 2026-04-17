@@ -78,6 +78,12 @@ struct WishperApp: App {
     }
 
     init() {
+        // Apply saved appearance mode
+        let savedMode = UserDefaults.standard.string(forKey: "appearanceMode") ?? "Dark"
+        if let mode = AppearanceMode(rawValue: savedMode) {
+            NSApp.appearance = mode.appearance
+        }
+
         let state = AppState()
         let monitor = MemoryMonitor()
         let onboardingWasCompleted = UserDefaults.standard.bool(forKey: "onboardingCompleted")
