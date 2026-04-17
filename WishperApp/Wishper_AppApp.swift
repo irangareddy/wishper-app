@@ -32,10 +32,14 @@ struct WishperApp: App {
             .onAppear {
                 if needsOnboarding {
                     needsOnboarding = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        NSApp.setActivationPolicy(.regular)
-                        openWindow(id: "main")
-                        NSApp.activate(ignoringOtherApps: true)
+                    // Retry multiple times to ensure window opens
+                    for delay in [0.5, 1.5, 3.0] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                            guard !onboardingCompleted else { return }
+                            NSApp.setActivationPolicy(.regular)
+                            openWindow(id: "main")
+                            NSApp.activate(ignoringOtherApps: true)
+                        }
                     }
                 }
             }
