@@ -5,6 +5,17 @@ import OSLog
 import Qwen3ASR
 import SpeechVAD
 
+struct SpeechModelLoadProgress: Sendable {
+    enum Phase: Sendable {
+        case asr
+        case vad
+    }
+
+    let phase: Phase
+    let fractionCompleted: Double
+    let status: String
+}
+
 /// Real-time streaming transcriber using VAD-driven segmentation.
 ///
 /// Audio is fed chunk-by-chunk from the mic callback. The VAD processor
@@ -45,16 +56,21 @@ actor StreamingTranscriber {
 
     // MARK: - Model Lifecycle
 
-    func loadModel() async throws {
-        guard asrModel == nil else { return }
-        logger.info("streaming transcriber loading ASR model")
-        asrModel = try await Qwen3ASRModel.fromPretrained(modelId: modelId) { progress, status in
-            print("[wishper] ASR model: [\(Int(progress * 100))%] \(status)")
+    func loadModel(onProgress: (@Sendable (SpeechModelLoadProgress) -> Void)? = nil) async throws {
+        if asrModel == nil {
+            logger.info("streaming transcriber loading ASR model")
+            asrModel = try await Qwen3ASRModel.fromPretrained(modelId: modelId) { progress, status in
+                print("[wishper] ASR model: [\(Int(progress * 100))%] \(status)")
+                onProgress?(.init(phase: .asr, fractionCompleted: progress, status: status))
+            }
         }
 
-        logger.info("streaming transcriber loading VAD model")
-        vadModel = try await SileroVADModel.fromPretrained(engine: .coreml) { progress, status in
-            print("[wishper] VAD model: [\(Int(progress * 100))%] \(status)")
+        if vadModel == nil {
+            logger.info("streaming transcriber loading VAD model")
+            vadModel = try await SileroVADModel.fromPretrained(engine: .coreml) { progress, status in
+                print("[wishper] VAD model: [\(Int(progress * 100))%] \(status)")
+                onProgress?(.init(phase: .vad, fractionCompleted: progress, status: status))
+            }
         }
         logger.info("streaming transcriber models loaded")
     }
