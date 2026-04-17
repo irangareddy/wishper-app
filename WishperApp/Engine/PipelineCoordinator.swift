@@ -34,7 +34,7 @@ final class PipelineCoordinator {
         self.cleaner = Cleaner(model: appState.selectedLLMModel, enabled: appState.cleanupEnabled)
     }
 
-    func start() async {
+    func start(promptForHotkeyPermissions: Bool = true) async {
         logger.info("voice pipeline startup")
 
         // Cap MLX buffer cache to prevent unbounded Metal memory growth
@@ -45,7 +45,7 @@ final class PipelineCoordinator {
         if !micGranted {
             appState.statusMessage = "Microphone access needed — check System Settings"
             logger.info("microphone access unavailable")
-            // Don't return — still set up hotkeys so accessibility gets prompted too
+            // Don't return — hotkeys and onboarding should still come up.
         } else {
             logger.info("microphone access available")
         }
@@ -141,7 +141,7 @@ final class PipelineCoordinator {
         modifierDetector.onCancel = { [weak self] in
             Task { @MainActor in self?.cancelRecording() }
         }
-        refreshModifierDetector(promptForPermissions: true)
+        refreshModifierDetector(promptForPermissions: promptForHotkeyPermissions)
 
         appDidBecomeActiveObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
@@ -188,6 +188,10 @@ final class PipelineCoordinator {
 
     func setChipPosition(_ position: ChipPosition) {
         overlay.setPosition(position)
+    }
+
+    func reevaluateHotkeyPermissions(promptForPermissions: Bool = false) {
+        refreshModifierDetector(promptForPermissions: promptForPermissions)
     }
 
     private func updateOverlayHotkeyLabel() {

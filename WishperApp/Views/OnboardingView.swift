@@ -5,7 +5,7 @@ import SwiftUI
 
 enum OnboardingStep: Int, CaseIterable {
     case welcome
-    case accessibility
+    case permissions
     case microphone
     case ready
 }
@@ -14,7 +14,7 @@ enum OnboardingStep: Int, CaseIterable {
 
 struct OnboardingView: View {
     @State private var currentStep: OnboardingStep = .welcome
-    @State private var accessibilityGranted = false
+    @State private var hotkeyPermissionState = HotkeyPermissionGuide.currentState()
     @State private var microphoneGranted = false
     var onComplete: () -> Void
 
@@ -72,6 +72,7 @@ struct OnboardingView: View {
         .background(Color(white: 0.06))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .animation(.easeInOut(duration: 0.35), value: currentStep)
+        .background(WindowActivator())
     }
 
     // MARK: - Shader Background
@@ -98,8 +99,8 @@ struct OnboardingView: View {
         switch currentStep {
         case .welcome:
             welcomeStep
-        case .accessibility:
-            accessibilityStep
+        case .permissions:
+            permissionsStep
         case .microphone:
             microphoneStep
         case .ready:
@@ -127,11 +128,11 @@ struct OnboardingView: View {
         .padding(.horizontal, 40)
     }
 
-    private var accessibilityStep: some View {
+    private var permissionsStep: some View {
         VStack(spacing: 16) {
-            Image(systemName: accessibilityGranted ? "checkmark.shield.fill" : "hand.raised.fill")
+            Image(systemName: hotkeyPermissionState.allGranted ? "checkmark.shield.fill" : "hand.raised.fill")
                 .font(.system(size: 44))
-                .foregroundStyle(accessibilityGranted ? .green : .white.opacity(0.9))
+                .foregroundStyle(hotkeyPermissionState.allGranted ? .green : .white.opacity(0.9))
                 .contentTransition(.symbolEffect(.replace))
 
             Text("Privacy Permissions")
@@ -144,22 +145,30 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
 
-            if !accessibilityGranted {
-                Button("Open Accessibility Settings") {
-                    let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
-                    accessibilityGranted = AXIsProcessTrustedWithOptions(options)
+            VStack(spacing: 10) {
+                permissionCard(
+                    title: "Accessibility",
+                    description: "Required so Wishper can paste text into your active app.",
+                    granted: hotkeyPermissionState.accessibilityGranted,
+                    actionTitle: "Guide Me"
+                ) {
+                    HotkeyPermissionGuide.openAccessibilityGuide()
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-            } else {
-                Label("Granted", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+
+                permissionCard(
+                    title: "Input Monitoring",
+                    description: "Required so fn and right-side modifier keys are detected globally.",
+                    granted: hotkeyPermissionState.inputMonitoringGranted,
+                    actionTitle: "Open Settings"
+                ) {
+                    _ = HotkeyPermissionGuide.requestInputMonitoringAccess()
+                }
             }
         }
         .padding(.horizontal, 40)
-        .onAppear {
-            accessibilityGranted = AXIsProcessTrusted()
+        .onAppear(perform: refreshPermissionState)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshPermissionState()
         }
     }
 
@@ -218,9 +227,11 @@ struct OnboardingView: View {
                 shortcutHint("Press", key: "⌃⌘V", action: "to paste last transcript")
             }
 
-            Text("If fn or Right Command does not work, enable Wishper in Privacy & Security under Accessibility and Input Monitoring.")
+            Text(hotkeyPermissionState.allGranted
+                 ? "Global hotkeys are ready."
+                 : "If fn or Right Command does not work, enable Wishper in Privacy & Security under Accessibility and Input Monitoring.")
                 .font(.system(size: 11, design: .rounded))
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(hotkeyPermissionState.allGranted ? .green.opacity(0.9) : .white.opacity(0.55))
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
 
@@ -247,12 +258,60 @@ struct OnboardingView: View {
         .font(.system(size: 12, weight: .medium, design: .rounded))
     }
 
+    private func permissionCard(
+        title: String,
+        description: String,
+        granted: Bool,
+        actionTitle: String,
+        action: @escaping @MainActor () -> Void
+    ) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: granted ? "checkmark.circle.fill" : "circle.dashed")
+                .font(.system(size: 18))
+                .foregroundStyle(granted ? .green : .white.opacity(0.75))
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                Text(description)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+
+            if granted {
+                Text("Enabled")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.green)
+            } else {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private func refreshPermissionState() {
+        hotkeyPermissionState = HotkeyPermissionGuide.currentState()
+    }
+
     // MARK: - Navigation
 
     private var buttonLabel: String {
         switch currentStep {
         case .welcome: "Get Started"
-        case .accessibility: accessibilityGranted ? "Continue" : "Skip for Now"
+        case .permissions: hotkeyPermissionState.allGranted ? "Continue" : "Skip for Now"
         case .microphone: microphoneGranted ? "Continue" : "Skip for Now"
         case .ready: "Start Using Wishper"
         }
@@ -266,6 +325,42 @@ struct OnboardingView: View {
         } else {
             onComplete()
         }
+    }
+}
+
+private struct WindowActivator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        ActivatingView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let view = nsView as? ActivatingView else { return }
+        view.activateWindowIfNeeded()
+    }
+}
+
+private final class ActivatingView: NSView {
+    private var activatedWindowNumber: Int?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        activateWindowIfNeeded()
+    }
+
+    func activateWindowIfNeeded() {
+        guard let window else { return }
+        guard activatedWindowNumber != window.windowNumber || !window.isKeyWindow else { return }
+
+        activatedWindowNumber = window.windowNumber
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        for candidate in NSApp.windows where candidate !== window && candidate.title == "Wishper" {
+            candidate.orderOut(nil)
+        }
+
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
     }
 }
 

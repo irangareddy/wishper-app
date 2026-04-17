@@ -9,6 +9,7 @@ struct SettingsDetailView: View {
     @AppStorage("launchAtLoginEnabled") private var launchAtLoginEnabled = false
     @State private var launchAtLoginError: String?
     @State private var showAdvanced = false
+    @State private var hotkeyPermissionState = HotkeyPermissionGuide.currentState()
 
     var body: some View {
         Form {
@@ -50,6 +51,25 @@ struct SettingsDetailView: View {
                 Text("Shortcuts")
             } footer: {
                 Text("Push to talk: hold to record, release to transcribe. Modifier-only triggers like fn or Right Command need both Accessibility and Input Monitoring to work globally on macOS.")
+            }
+
+            Section {
+                LabeledContent("Accessibility") {
+                    permissionStatusLabel(hotkeyPermissionState.accessibilityGranted)
+                }
+                LabeledContent("Input Monitoring") {
+                    permissionStatusLabel(hotkeyPermissionState.inputMonitoringGranted)
+                }
+                Button("Guide Accessibility Setup") {
+                    HotkeyPermissionGuide.openAccessibilityGuide()
+                }
+                Button("Open Input Monitoring Settings") {
+                    _ = HotkeyPermissionGuide.requestInputMonitoringAccess()
+                }
+            } header: {
+                Text("Permissions")
+            } footer: {
+                Text("Use these controls if modifier-only hotkeys stop working after onboarding.")
             }
 
             // ── Appearance ──
@@ -141,6 +161,7 @@ struct SettingsDetailView: View {
                 acknowledgmentRow("speech-swift", by: "soniqo", url: "https://github.com/soniqo/speech-swift")
                 acknowledgmentRow("swift-transformers", by: "Hugging Face", url: "https://github.com/huggingface/swift-transformers")
                 acknowledgmentRow("KeyboardShortcuts", by: "Sindre Sorhus", url: "https://github.com/sindresorhus/KeyboardShortcuts")
+                acknowledgmentRow("Permiso", by: "zats", url: "https://github.com/zats/permiso")
             } header: {
                 Text("Acknowledgments")
             } footer: {
@@ -148,7 +169,13 @@ struct SettingsDetailView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear(perform: syncLaunchAtLoginState)
+        .onAppear {
+            syncLaunchAtLoginState()
+            refreshPermissionState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshPermissionState()
+        }
     }
 
     // MARK: - Row Builders
@@ -164,6 +191,11 @@ struct SettingsDetailView: View {
         } label: {
             Text(name)
         }
+    }
+
+    private func permissionStatusLabel(_ granted: Bool) -> some View {
+        Text(granted ? "Enabled" : "Needs access")
+            .foregroundStyle(granted ? .green : .secondary)
     }
 
     // MARK: - Bindings
@@ -217,5 +249,9 @@ struct SettingsDetailView: View {
             launchAtLoginEnabled.toggle()
             launchAtLoginError = error.localizedDescription
         }
+    }
+
+    private func refreshPermissionState() {
+        hotkeyPermissionState = HotkeyPermissionGuide.currentState()
     }
 }

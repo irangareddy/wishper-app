@@ -16,11 +16,7 @@ struct WishperApp: App {
         MenuBarExtra {
             MenuBarMenu(appState: appState, onOpenWindow: {
                 NSApp.setActivationPolicy(.regular)
-                if !onboardingCompleted {
-                    openWindow(id: "onboarding")
-                } else {
-                    openWindow(id: "main")
-                }
+                openWindow(id: "main")
                 NSApp.activate(ignoringOtherApps: true)
             })
         } label: {
@@ -38,7 +34,7 @@ struct WishperApp: App {
                     needsOnboarding = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         NSApp.setActivationPolicy(.regular)
-                        openWindow(id: "onboarding")
+                        openWindow(id: "main")
                         NSApp.activate(ignoringOtherApps: true)
                     }
                 }
@@ -46,26 +42,19 @@ struct WishperApp: App {
         }
 
         Window("Wishper", id: "main") {
-            MainWindowView(appState: appState)
+            if onboardingCompleted {
+                MainWindowView(appState: appState)
+            } else {
+                OnboardingView {
+                    onboardingCompleted = true
+                    coordinator?.reevaluateHotkeyPermissions(promptForPermissions: false)
+                }
+            }
         }
         .defaultSize(width: 660, height: 500)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
-
-        // Onboarding window — opens automatically on first launch
-        Window("Welcome to Wishper", id: "onboarding") {
-            OnboardingView {
-                onboardingCompleted = true
-                // Close onboarding window
-                NSApp.windows.first { $0.title == "Welcome to Wishper" }?.close()
-                NSApp.setActivationPolicy(.accessory)
-            }
-            .frame(width: 480, height: 340)
-        }
-        .windowResizability(.contentSize)
-        .windowStyle(.hiddenTitleBar)
-        .defaultPosition(.center)
 
         Settings {
             SettingsDetailView(appState: appState)
@@ -76,6 +65,7 @@ struct WishperApp: App {
     init() {
         let state = AppState()
         let monitor = MemoryMonitor()
+        let onboardingWasCompleted = UserDefaults.standard.bool(forKey: "onboardingCompleted")
         state.memoryMonitor = monitor
         _appState = StateObject(wrappedValue: state)
         let coord = PipelineCoordinator(appState: state, memoryMonitor: monitor)
@@ -83,10 +73,10 @@ struct WishperApp: App {
         state.coordinator = coord
         logger.debug("app init scheduling pipeline start")
         Task { @MainActor in
-            await coord.start()
+            await coord.start(promptForHotkeyPermissions: onboardingWasCompleted)
         }
 
-        if !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
+        if !onboardingWasCompleted {
             needsOnboarding = true
         }
     }

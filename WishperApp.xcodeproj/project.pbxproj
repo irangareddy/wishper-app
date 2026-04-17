@@ -13,6 +13,7 @@
 		1D29B8EA2F8AC77D000EE34A /* SpeechVAD in Frameworks */ = {isa = PBXBuildFile; productRef = 1D29B8E92F8AC77D000EE34A /* SpeechVAD */; };
 		1D29B8ED2F8ACA97000EE34A /* MLXFast in Frameworks */ = {isa = PBXBuildFile; productRef = 1D29B8EC2F8ACA97000EE34A /* MLXFast */; };
 		1DD8CE4B2F90A661001BCC30 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 1DD8CE4A2F90A661001BCC30 /* KeyboardShortcuts */; };
+		9D0A7C6E315B100100AA0001 /* Permiso in Frameworks */ = {isa = PBXBuildFile; productRef = 9D0A7C6D315B100100AA0001 /* Permiso */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +68,7 @@
 				1D29B8ED2F8ACA97000EE34A /* MLXFast in Frameworks */,
 				1D29B8E32F8AC67E000EE34A /* MLXLLM in Frameworks */,
 				1DD8CE4B2F90A661001BCC30 /* KeyboardShortcuts in Frameworks */,
+				9D0A7C6E315B100100AA0001 /* Permiso in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,6 +135,7 @@
 				1D29B8E92F8AC77D000EE34A /* SpeechVAD */,
 				1D29B8EC2F8ACA97000EE34A /* MLXFast */,
 				1DD8CE4A2F90A661001BCC30 /* KeyboardShortcuts */,
+				9D0A7C6D315B100100AA0001 /* Permiso */,
 			);
 			productName = WishperApp;
 			productReference = 1D04487F2F8AC1C600801B60 /* WishperApp.app */;
@@ -221,6 +224,7 @@
 				1D29B8E62F8AC77D000EE34A /* XCRemoteSwiftPackageReference "speech-swift" */,
 				1D29B8EB2F8ACA96000EE34A /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				1DD8CE492F90A661001BCC30 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+				9D0A7C6C315B100100AA0001 /* XCRemoteSwiftPackageReference "permiso" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1D0448802F8AC1C600801B60 /* Products */;
@@ -439,6 +443,8 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Wishper;
+				INFOPLIST_KEY_CFBundleName = Wishper;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Wishper needs microphone access to transcribe your speech.";
@@ -448,7 +454,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "in.irangareddy.Wishper-App";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Wishper;
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -488,6 +494,8 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Wishper;
+				INFOPLIST_KEY_CFBundleName = Wishper;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Wishper needs microphone access to transcribe your speech.";
@@ -497,7 +505,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "in.irangareddy.Wishper-App";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Wishper;
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -668,6 +676,14 @@
 				minimumVersion = 2.4.0;
 			};
 		};
+		9D0A7C6C315B100100AA0001 /* XCRemoteSwiftPackageReference "permiso" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/zats/permiso.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -700,6 +716,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1DD8CE492F90A661001BCC30 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
+		};
+		9D0A7C6D315B100100AA0001 /* Permiso */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9D0A7C6C315B100100AA0001 /* XCRemoteSwiftPackageReference "permiso" */;
+			productName = Permiso;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
