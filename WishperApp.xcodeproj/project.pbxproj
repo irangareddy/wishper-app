@@ -34,7 +34,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		1D04487F2F8AC1C600801B60 /* WishperApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WishperApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D04487F2F8AC1C600801B60 /* Wishper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wishper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D04488C2F8AC1C800801B60 /* WishperAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WishperAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D0448962F8AC1C800801B60 /* WishperAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WishperAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -102,7 +102,7 @@
 		1D0448802F8AC1C600801B60 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1D04487F2F8AC1C600801B60 /* WishperApp.app */,
+				1D04487F2F8AC1C600801B60 /* Wishper.app */,
 				1D04488C2F8AC1C800801B60 /* WishperAppTests.xctest */,
 				1D0448962F8AC1C800801B60 /* WishperAppUITests.xctest */,
 			);
@@ -138,7 +138,7 @@
 				9D0A7C6D315B100100AA0001 /* Permiso */,
 			);
 			productName = WishperApp;
-			productReference = 1D04487F2F8AC1C600801B60 /* WishperApp.app */;
+			productReference = 1D04487F2F8AC1C600801B60 /* Wishper.app */;
 			productType = "com.apple.product-type.application";
 		};
 		1D04488B2F8AC1C800801B60 /* WishperAppTests */ = {
@@ -428,6 +428,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = WishperApp/Wishper_App.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -456,6 +457,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "in.irangareddy.Wishper-App";
 				PRODUCT_NAME = Wishper;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -480,6 +482,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = WishperApp/Wishper_App.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -508,6 +511,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "in.irangareddy.Wishper-App";
 				PRODUCT_NAME = Wishper;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;

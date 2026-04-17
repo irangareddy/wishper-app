@@ -20,7 +20,6 @@ struct HomeView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     // MARK: - Header
@@ -31,11 +30,13 @@ struct HomeView: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            HStack(spacing: 12) {
-                StatCard(value: "\(appState.stats.weeklyStreak)", label: "Week Streak")
-                StatCard(value: "\(appState.stats.averageWPM)", label: "Avg WPM")
-                StatCard(value: formatNumber(appState.stats.totalWords), label: "Total Words")
-                StatCard(value: "\(appState.stats.appsUsed.count)", label: "Apps Used")
+            GlassEffectContainer(spacing: 12) {
+                HStack(spacing: 12) {
+                    StatCard(value: "\(appState.stats.weeklyStreak)", label: "Week Streak")
+                    StatCard(value: "\(appState.stats.averageWPM)", label: "Avg WPM")
+                    StatCard(value: formatNumber(appState.stats.totalWords), label: "Total Words")
+                    StatCard(value: "\(appState.stats.appsUsed.count)", label: "Apps Used")
+                }
             }
         }
     }
@@ -158,7 +159,7 @@ private struct StatCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

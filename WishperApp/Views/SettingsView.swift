@@ -54,22 +54,20 @@ struct SettingsDetailView: View {
             }
 
             Section {
-                LabeledContent("Accessibility") {
-                    permissionStatusLabel(hotkeyPermissionState.accessibilityGranted)
-                }
-                LabeledContent("Input Monitoring") {
-                    permissionStatusLabel(hotkeyPermissionState.inputMonitoringGranted)
-                }
-                Button("Guide Accessibility Setup") {
+                permissionRow(
+                    "Accessibility",
+                    granted: hotkeyPermissionState.accessibilityGranted
+                ) {
                     HotkeyPermissionGuide.openAccessibilityGuide()
                 }
-                Button("Open Input Monitoring Settings") {
+                permissionRow(
+                    "Input Monitoring",
+                    granted: hotkeyPermissionState.inputMonitoringGranted
+                ) {
                     _ = HotkeyPermissionGuide.requestInputMonitoringAccess()
                 }
             } header: {
                 Text("Permissions")
-            } footer: {
-                Text("Use these controls if modifier-only hotkeys stop working after onboarding.")
             }
 
             // ── Appearance ──
@@ -193,9 +191,27 @@ struct SettingsDetailView: View {
         }
     }
 
-    private func permissionStatusLabel(_ granted: Bool) -> some View {
-        Text(granted ? "Enabled" : "Needs access")
-            .foregroundStyle(granted ? .green : .secondary)
+    @ViewBuilder
+    private func permissionRow(_ title: String, granted: Bool, action: @escaping () -> Void) -> some View {
+        if granted {
+            LabeledContent(title) {
+                Text("Enabled")
+                    .foregroundStyle(.green)
+            }
+        } else {
+            Button(action: action) {
+                LabeledContent(title) {
+                    HStack(spacing: 4) {
+                        Text("Need Access")
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.forward")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: - Bindings

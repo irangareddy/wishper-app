@@ -215,15 +215,11 @@ private struct OverlayContent: View {
     private var isTopPosition: Bool { model.chipPosition == .belowNotch }
 
     var body: some View {
-        // Chip is FIXED at top (or bottom). Suggestions slide in below (or above).
-        // Using VStack with Spacer so the chip never moves.
         VStack(spacing: 0) {
             if isTopPosition {
-                // CHIP pinned to top
                 chipArea
                     .padding(.top, 4)
 
-                // Suggestions slide in from top, below the chip
                 suggestionsArea
                     .padding(.top, 6)
 
@@ -231,11 +227,9 @@ private struct OverlayContent: View {
             } else {
                 Spacer(minLength: 0)
 
-                // Suggestions slide in from bottom, above the chip
                 suggestionsArea
                     .padding(.bottom, 6)
 
-                // CHIP pinned to bottom
                 chipArea
                     .padding(.bottom, 4)
             }
@@ -324,21 +318,14 @@ private struct OverlayContent: View {
 // MARK: - Chip Background
 
 private struct ChipBackground: View {
+    var interactive = true
+
     var body: some View {
-        Capsule()
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color(white: 0.10).opacity(0.94),
-                        Color(white: 0.05).opacity(0.92)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
+        Color.clear
+            .glassEffect(interactive ? .regular.interactive() : .regular, in: Capsule())
             .overlay {
                 Capsule()
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
             }
     }
 }
@@ -352,17 +339,21 @@ private struct IdleChip: View {
     @State private var isHovering = false
 
     var body: some View {
-        // Just the bar — the hover suggestion comes from suggestionsArea in OverlayContent
-        Capsule()
-            .strokeBorder(Color.white.opacity(isHovering ? 0.5 : 0.3), lineWidth: 1)
-            .frame(width: 36, height: 8)
-            .contentShape(Rectangle().size(width: 120, height: 24).offset(x: -42, y: -8))
-            .onTapGesture { onTap() }
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isHovering = hovering
-                }
+        ZStack {
+            ChipBackground()
+
+            Capsule(style: .continuous)
+                .fill(Color.primary.opacity(isHovering ? 0.42 : 0.24))
+                .frame(width: isHovering ? 18 : 14, height: 3)
+        }
+        .frame(width: 44, height: 12)
+        .contentShape(Rectangle().size(width: 120, height: 24).offset(x: -38, y: -6))
+        .onTapGesture { onTap() }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isHovering = hovering
             }
+        }
     }
 }
 
@@ -405,7 +396,6 @@ private struct RecordingChip: View {
         }
         .frame(width: ChipLayout.chipWidth, height: ChipLayout.chipHeight)
         .background(ChipBackground())
-        .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
     }
 }
 
@@ -417,8 +407,7 @@ private struct ProcessingChip: View {
     var body: some View {
         SlowActivityBars(baseHeights: [4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4], reduceMotion: reduceMotion)
             .frame(width: ChipLayout.chipWidth, height: ChipLayout.chipHeight)
-            .background(ChipBackground())
-            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            .background(ChipBackground(interactive: false))
     }
 }
 
@@ -434,8 +423,7 @@ private struct DoneChip: View {
             }
         }
         .frame(width: ChipLayout.chipWidth, height: ChipLayout.chipHeight)
-        .background(ChipBackground())
-        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+        .background(ChipBackground(interactive: false))
     }
 }
 
@@ -551,28 +539,17 @@ private struct PromptBubble: View {
     var body: some View {
         HStack(spacing: 0) {
             Text(prompt.prefix)
-                .foregroundStyle(Color.white.opacity(0.96))
+                .foregroundStyle(.primary)
             Text(prompt.hotkey)
-                .foregroundStyle(Color(red: 0.75, green: 0.45, blue: 1.0))
+                .foregroundStyle(.tint)
             Text(prompt.suffix)
-                .foregroundStyle(Color.white.opacity(0.96))
+                .foregroundStyle(.primary)
         }
         .font(.system(size: 13, weight: .medium, design: .default))
         .lineLimit(1)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(white: 0.10).opacity(0.94),
-                    Color(white: 0.05).opacity(0.92)
-                ],
-                startPoint: .top, endPoint: .bottom
-            ),
-            in: Capsule()
-        )
-        .overlay { Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1) }
-        .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
+        .glassEffect(.regular, in: Capsule())
     }
 }
 

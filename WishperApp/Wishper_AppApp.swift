@@ -17,6 +17,7 @@ struct WishperApp: App {
     private var isSetupComplete: Bool {
         onboardingCompleted
             && AXIsProcessTrusted()
+            && CGPreflightListenEventAccess()
             && AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
             && appState.modelPreparationPhase == .ready
     }
@@ -65,8 +66,8 @@ struct WishperApp: App {
                 }
             }
         }
-        .defaultSize(width: isSetupComplete ? 660 : 400, height: isSetupComplete ? 500 : 420)
-        .windowResizability(.contentMinSize)
+        .defaultSize(width: isSetupComplete ? 660 : 540, height: isSetupComplete ? 500 : 560)
+        .windowResizability(isSetupComplete ? .contentMinSize : .contentSize)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
 
@@ -92,8 +93,9 @@ struct WishperApp: App {
 
         // Show onboarding whenever any requirement is unmet
         let accessOk = AXIsProcessTrusted()
+        let inputOk = CGPreflightListenEventAccess()
         let micOk = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        if !onboardingWasCompleted || !accessOk || !micOk {
+        if !onboardingWasCompleted || !accessOk || !inputOk || !micOk {
             needsOnboarding = true
         }
     }
