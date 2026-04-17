@@ -47,10 +47,9 @@ struct OnboardingView: View {
                         icon: "lock.shield",
                         title: "Accessibility",
                         description: "Paste text into active apps",
-                        status: accessibilityGranted ? .done : .action("Open Settings")
+                        status: accessibilityGranted ? .done : .action("Guide Me")
                     ) {
-                        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
-                        AXIsProcessTrustedWithOptions(options)
+                        HotkeyPermissionGuide.openAccessibilityGuide()
                     }
 
                     checklistRow(
