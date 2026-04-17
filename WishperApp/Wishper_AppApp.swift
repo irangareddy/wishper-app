@@ -49,19 +49,14 @@ struct WishperApp: App {
             if onboardingCompleted {
                 MainWindowView(appState: appState)
             } else {
-                OnboardingView(
-                    appState: appState,
-                    onRetryPreparation: { coordinator?.retryPreparation() }
-                ) {
+                OnboardingView(appState: appState) {
                     onboardingCompleted = true
-                    if appState.microphonePermissionGranted, appState.isModelPreparationReady {
-                        appState.statusMessage = "Ready"
-                    }
+                    appState.statusMessage = "Ready"
                     coordinator?.reevaluateHotkeyPermissions(promptForPermissions: false)
                 }
             }
         }
-        .defaultSize(width: 660, height: 500)
+        .defaultSize(width: onboardingCompleted ? 660 : 400, height: onboardingCompleted ? 500 : 420)
         .windowResizability(.contentMinSize)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
