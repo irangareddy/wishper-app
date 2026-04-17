@@ -182,8 +182,7 @@ final class RecordingOverlayController {
         case .belowNotch:
             y = visibleFrame.maxY - h - 2
         case .aboveDock:
-            let dockHeight = screenFrame.height - visibleFrame.height - (screenFrame.height - visibleFrame.maxY)
-            y = visibleFrame.minY + max(dockHeight, 12) + 4
+            y = visibleFrame.minY + 4
         }
 
         panel.setFrame(NSRect(x: x, y: y, width: w, height: h), display: true)
