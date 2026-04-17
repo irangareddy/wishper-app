@@ -7,6 +7,7 @@ import OSLog
 @MainActor
 final class TextInjector {
     private let logger = WishperLog.voicePipeline
+    private var clipboardRestoreTask: Task<Void, Never>?
 
     private static let textElementRoles: Set<String> = [
         kAXTextFieldRole as String,
@@ -15,28 +16,67 @@ final class TextInjector {
         "AXWebArea",
     ]
 
+    private struct PasteboardSnapshot {
+        struct Item {
+            let payloads: [(type: NSPasteboard.PasteboardType, data: Data)]
+        }
+
+        let items: [Item]
+
+        static func capture(from pasteboard: NSPasteboard) -> PasteboardSnapshot {
+            let items = (pasteboard.pasteboardItems ?? []).map { item in
+                let payloads = item.types.compactMap { type -> (NSPasteboard.PasteboardType, Data)? in
+                    guard let data = item.data(forType: type) else { return nil }
+                    return (type, data)
+                }
+                return Item(payloads: payloads)
+            }
+
+            return PasteboardSnapshot(items: items)
+        }
+
+        func restore(to pasteboard: NSPasteboard) {
+            pasteboard.clearContents()
+
+            guard !items.isEmpty else { return }
+
+            let restoredItems = items.map { snapshotItem in
+                let item = NSPasteboardItem()
+                for payload in snapshotItem.payloads {
+                    item.setData(payload.data, forType: payload.type)
+                }
+                return item
+            }
+
+            pasteboard.writeObjects(restoredItems)
+        }
+    }
+
     /// Inject text into the target app. Pass the target app's PID to bypass focus issues.
     func inject(_ text: String, targetPID: pid_t? = nil) -> Bool {
-        // Always put text on clipboard first
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-
         // Strategy 1: Accessibility API — direct insert at cursor
         if insertViaAccessibility(text) {
             logger.info("injection path=accessibility")
             return true
         }
 
+        let pasteboard = NSPasteboard.general
+        let snapshot = PasteboardSnapshot.capture(from: pasteboard)
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        let injectedChangeCount = pasteboard.changeCount
+
         // Strategy 2: postToPid — delivers Cmd+V directly to target process, bypasses focus
         if let pid = targetPID {
             simulatePasteToPID(pid)
+            scheduleClipboardRestore(snapshot, expectedChangeCount: injectedChangeCount)
             logger.info("injection path=postToPid pid=\(pid)")
             return true
         }
 
         // Strategy 3: Post to session (fallback if no PID)
         simulatePaste()
+        scheduleClipboardRestore(snapshot, expectedChangeCount: injectedChangeCount)
         logger.info("injection path=sessionPaste")
         return true
     }
@@ -130,5 +170,22 @@ final class TextInjector {
         keyDown?.post(tap: .cghidEventTap)
         usleep(10_000)
         keyUp?.post(tap: .cghidEventTap)
+    }
+
+    private func scheduleClipboardRestore(_ snapshot: PasteboardSnapshot, expectedChangeCount: Int) {
+        clipboardRestoreTask?.cancel()
+        clipboardRestoreTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self else { return }
+
+            let pasteboard = NSPasteboard.general
+            guard pasteboard.changeCount == expectedChangeCount else {
+                self.logger.info("clipboard restore skipped because clipboard changed")
+                return
+            }
+
+            snapshot.restore(to: pasteboard)
+            self.logger.info("clipboard restored after injection")
+        }
     }
 }
