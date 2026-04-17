@@ -25,6 +25,15 @@ final class ModifierKeyDetector {
     nonisolated(unsafe) private var isPttDown = false
     private var watchdogTask: Task<Void, Never>?
 
+    struct PermissionState {
+        let accessibilityTrusted: Bool
+        let inputMonitoringTrusted: Bool
+
+        var fullyTrusted: Bool {
+            accessibilityTrusted && inputMonitoringTrusted
+        }
+    }
+
     /// Map key name strings to (keyCode, modifierFlag)
     static let keyMap: [String: (keyCode: UInt16, flag: NSEvent.ModifierFlags)] = [
         "fn":           (63, .function),
@@ -54,17 +63,51 @@ final class ModifierKeyDetector {
         logger.info("configured ptt=\(pttKey) cancel=\(cancelKey)")
     }
 
-    func start() {
-        let trusted = AXIsProcessTrusted()
-        logger.info("starting modifier detector, accessibility=\(trusted)")
-
-        if !trusted {
+    func permissionState(prompt: Bool) -> PermissionState {
+        let accessibilityTrusted: Bool
+        if prompt {
             let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
+            accessibilityTrusted = AXIsProcessTrustedWithOptions(options)
+        } else {
+            accessibilityTrusted = AXIsProcessTrusted()
         }
 
-        createTap()
+        let inputMonitoringTrusted: Bool
+        if prompt {
+            inputMonitoringTrusted = CGRequestListenEventAccess()
+        } else {
+            inputMonitoringTrusted = CGPreflightListenEventAccess()
+        }
+
+        return PermissionState(
+            accessibilityTrusted: accessibilityTrusted,
+            inputMonitoringTrusted: inputMonitoringTrusted
+        )
+    }
+
+    @discardableResult
+    func start(promptForPermissions: Bool = true) -> Bool {
+        let permissions = permissionState(prompt: promptForPermissions)
+        logger.info(
+            "starting modifier detector, accessibility=\(permissions.accessibilityTrusted) inputMonitoring=\(permissions.inputMonitoringTrusted)"
+        )
+
+        guard permissions.fullyTrusted else {
+            if !permissions.accessibilityTrusted {
+                logger.error("accessibility not granted; modifier detector not started")
+            }
+            if !permissions.inputMonitoringTrusted {
+                logger.error("input monitoring not granted; modifier detector not started")
+            }
+            destroyTap()
+            watchdogTask?.cancel()
+            watchdogTask = nil
+            return false
+        }
+
+        let tapCreated = createTap()
         startWatchdog()
+        return tapCreated
     }
 
     func stop() {
@@ -75,8 +118,8 @@ final class ModifierKeyDetector {
 
     // MARK: - Event Tap
 
-    private func createTap() {
-        guard eventTap == nil else { return }
+    private func createTap() -> Bool {
+        guard eventTap == nil else { return true }
 
         let mask: CGEventMask =
             (1 << CGEventType.flagsChanged.rawValue) |
@@ -96,7 +139,7 @@ final class ModifierKeyDetector {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             logger.error("event tap creation failed")
-            return
+            return false
         }
 
         self.eventTap = tap
@@ -106,6 +149,7 @@ final class ModifierKeyDetector {
         }
         CGEvent.tapEnable(tap: tap, enable: true)
         logger.info("modifier key detector started")
+        return true
     }
 
     private func destroyTap() {
@@ -136,7 +180,9 @@ final class ModifierKeyDetector {
                     }
                 } else {
                     self.logger.info("watchdog recreating tap")
-                    self.createTap()
+                    if !self.createTap() {
+                        self.logger.error("watchdog failed to recreate tap")
+                    }
                 }
             }
         }

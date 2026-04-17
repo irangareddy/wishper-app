@@ -28,10 +28,16 @@ final class AppState: ObservableObject {
     @Published var cleanupEnabled = false
     @Published var transcriptionLanguage = "en"
     @Published var pushToTalkKey: String {
-        didSet { UserDefaults.standard.set(pushToTalkKey, forKey: "pushToTalkKey") }
+        didSet {
+            UserDefaults.standard.set(pushToTalkKey, forKey: "pushToTalkKey")
+            coordinator?.updateShortcutConfiguration(pushToTalkKey: pushToTalkKey, cancelKey: cancelKey)
+        }
     }
     @Published var cancelKey: String {
-        didSet { UserDefaults.standard.set(cancelKey, forKey: "cancelKey") }
+        didSet {
+            UserDefaults.standard.set(cancelKey, forKey: "cancelKey")
+            coordinator?.updateShortcutConfiguration(pushToTalkKey: pushToTalkKey, cancelKey: cancelKey)
+        }
     }
     @Published var handsFreeConfig = HotkeyConfiguration.fnSpace
     @Published var soundsEnabled = true

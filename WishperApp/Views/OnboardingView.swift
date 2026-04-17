@@ -134,11 +134,11 @@ struct OnboardingView: View {
                 .foregroundStyle(accessibilityGranted ? .green : .white.opacity(0.9))
                 .contentTransition(.symbolEffect(.replace))
 
-            Text("Accessibility Access")
+            Text("Privacy Permissions")
                 .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
 
-            Text("Wishper needs Accessibility to detect hotkeys\nand paste text into your active app.")
+            Text("Wishper needs two macOS permissions for global dictation.\nAccessibility lets Wishper paste into your active app.\nInput Monitoring lets fn and Right Command work as push-to-talk keys.")
                 .font(.system(size: 13, design: .rounded))
                 .foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
@@ -217,6 +217,12 @@ struct OnboardingView: View {
                 shortcutHint("Press", key: "fn Space", action: "for hands-free")
                 shortcutHint("Press", key: "⌃⌘V", action: "to paste last transcript")
             }
+
+            Text("If fn or Right Command does not work, enable Wishper in Privacy & Security under Accessibility and Input Monitoring.")
+                .font(.system(size: 11, design: .rounded))
+                .foregroundStyle(.white.opacity(0.55))
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
 
             Text("Models will download on first use (~500MB)")
                 .font(.system(size: 11, design: .rounded))

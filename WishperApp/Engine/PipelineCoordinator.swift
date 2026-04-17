@@ -24,6 +24,7 @@ final class PipelineCoordinator {
     private var targetApp: NSRunningApplication?
     private var overlayHideTask: Task<Void, Never>?
     private var overlayLevelTask: Task<Void, Never>?
+    private var appDidBecomeActiveObserver: NSObjectProtocol?
     private let logger = WishperLog.voicePipeline
 
     init(appState: AppState, memoryMonitor: MemoryMonitor) {
@@ -117,7 +118,7 @@ final class PipelineCoordinator {
         }
 
         // ── Modifier key detector (fn, Right Command, etc.) ──
-        modifierDetector.configure(pttKey: appState.pushToTalkKey, cancelKey: appState.cancelKey)
+        updateShortcutConfiguration(pushToTalkKey: appState.pushToTalkKey, cancelKey: appState.cancelKey)
         modifierDetector.onPttDown = { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
@@ -140,7 +141,18 @@ final class PipelineCoordinator {
         modifierDetector.onCancel = { [weak self] in
             Task { @MainActor in self?.cancelRecording() }
         }
-        modifierDetector.start()
+        refreshModifierDetector(promptForPermissions: true)
+
+        appDidBecomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.refreshModifierDetector(promptForPermissions: false)
+            }
+        }
 
         logger.info("all shortcuts registered")
 
@@ -162,19 +174,24 @@ final class PipelineCoordinator {
 
         // Set chip position and update overlay hotkey label
         overlay.setPosition(appState.chipPosition)
-        let pttLabel = appState.pushToTalkKey == "fn" ? "fn" :
-                       appState.pushToTalkKey == "rightCommand" ? "⌘" :
-                       appState.pushToTalkKey == "rightOption" ? "⌥" :
-                       appState.pushToTalkKey == "rightControl" ? "⌃" :
-                       appState.pushToTalkKey == "rightShift" ? "⇧" : "fn"
-        overlay.setHotkeyLabel(pttLabel)
+        updateOverlayHotkeyLabel()
         logger.info("hotkeys registered: fn=PTT, ⌃Space=handsFree, ⌃⌘V=paste")
         showReadyPrompt()
         logger.info("keyboard shortcuts registered")
     }
 
+    func updateShortcutConfiguration(pushToTalkKey: String, cancelKey: String) {
+        modifierDetector.configure(pttKey: pushToTalkKey, cancelKey: cancelKey)
+        updateOverlayHotkeyLabel()
+        refreshModifierDetector(promptForPermissions: false)
+    }
+
     func setChipPosition(_ position: ChipPosition) {
         overlay.setPosition(position)
+    }
+
+    private func updateOverlayHotkeyLabel() {
+        overlay.setHotkeyLabel(currentPushToTalkSymbol())
     }
 
     private func pasteLastTranscript() {
@@ -186,6 +203,10 @@ final class PipelineCoordinator {
     }
 
     func stop() {
+        if let observer = appDidBecomeActiveObserver {
+            NotificationCenter.default.removeObserver(observer)
+            appDidBecomeActiveObserver = nil
+        }
         modifierDetector.stop()
         KeyboardShortcuts.removeAllHandlers()
         recorder.stop()
@@ -195,6 +216,19 @@ final class PipelineCoordinator {
         cancelOverlayMetering()
         cancelOverlayHide()
         overlay.hide()
+    }
+
+    private func refreshModifierDetector(promptForPermissions: Bool) {
+        let modifierDetectorStarted = modifierDetector.start(promptForPermissions: promptForPermissions)
+        if modifierDetectorStarted {
+            if appState.statusMessage == "Enable Input Monitoring and Accessibility for fn/right-side hotkeys" {
+                appState.statusMessage = "Ready"
+            }
+            return
+        }
+
+        appState.statusMessage = "Enable Input Monitoring and Accessibility for fn/right-side hotkeys"
+        logger.error("modifier detector unavailable")
     }
 
     private func startRecording() {
@@ -262,6 +296,7 @@ final class PipelineCoordinator {
         appState.isRecording = false
         appState.recordingStartedAt = nil
         logger.info("recording stopped")
+        logger.info("recording duration seconds=\(self.recorder.duration, format: .fixed(precision: 2))")
         if appState.soundsEnabled { sounds.stopRecording() }
 
         isProcessing = true
@@ -280,7 +315,11 @@ final class PipelineCoordinator {
             logger.info("transcription completed: \(raw.count) chars")
 
             guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                appState.statusMessage = "No speech detected"
+                if recorder.duration < 0.35 {
+                    appState.statusMessage = "Hold \(currentPushToTalkLabel()) while speaking"
+                } else {
+                    appState.statusMessage = "No speech detected"
+                }
                 appState.addToHistory(raw: "Audio is silent.", cleaned: "Audio is silent.")
                 overlay.hide()
                 isProcessing = false
@@ -395,20 +434,49 @@ final class PipelineCoordinator {
     }
 
     private func showReadyPrompt() {
-        let shortcutLabel = appState.pushToTalkKey == "fn" ? "fn" :
-                            appState.pushToTalkKey == "rightCommand" ? "Right ⌘" :
-                            appState.pushToTalkKey == "rightOption" ? "Right ⌥" :
-                            appState.pushToTalkKey == "rightControl" ? "Right ⌃" :
-                            appState.pushToTalkKey == "rightShift" ? "Right ⇧" : "fn"
         overlay.show(
             state: .readyPrompt,
             prompt: RecordingOverlayPrompt(
                 prefix: "Hold ",
-                hotkey: shortcutLabel,
+                hotkey: currentPushToTalkLabel(),
                 suffix: " to dictate"
             )
         )
         scheduleOverlayHide(after: 4)
+    }
+
+    private func currentPushToTalkSymbol() -> String {
+        switch appState.pushToTalkKey {
+        case "fn":
+            return "fn"
+        case "rightCommand":
+            return "⌘"
+        case "rightOption":
+            return "⌥"
+        case "rightControl":
+            return "⌃"
+        case "rightShift":
+            return "⇧"
+        default:
+            return "fn"
+        }
+    }
+
+    private func currentPushToTalkLabel() -> String {
+        switch appState.pushToTalkKey {
+        case "fn":
+            return "fn"
+        case "rightCommand":
+            return "Right ⌘"
+        case "rightOption":
+            return "Right ⌥"
+        case "rightControl":
+            return "Right ⌃"
+        case "rightShift":
+            return "Right ⇧"
+        default:
+            return "fn"
+        }
     }
 
     private func scheduleOverlayHide(after seconds: Double) {

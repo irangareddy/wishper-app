@@ -49,7 +49,7 @@ struct SettingsDetailView: View {
             } header: {
                 Text("Shortcuts")
             } footer: {
-                Text("Push to talk: hold to record, release to transcribe. fn always works as a bonus trigger.")
+                Text("Push to talk: hold to record, release to transcribe. Modifier-only triggers like fn or Right Command need both Accessibility and Input Monitoring to work globally on macOS.")
             }
 
             // ── Appearance ──
