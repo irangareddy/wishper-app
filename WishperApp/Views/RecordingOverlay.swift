@@ -10,7 +10,6 @@ enum RecordingOverlayState: Equatable {
     case recording
     case transcribing
     case cleaning
-    case done
     case cancelled
 }
 
@@ -51,6 +50,8 @@ final class RecordingOverlayModel: ObservableObject {
     @Published var chipPosition: ChipPosition = .belowNotch
     @Published var hotkeyLabel: String = "Right Command"
 }
+
+// MARK: - Click-Through Hosting View
 
 // MARK: - Controller
 
@@ -163,7 +164,7 @@ final class RecordingOverlayController {
         switch model.state {
         case .idle, .recording, .cancelled:
             panel.ignoresMouseEvents = false
-        case .readyPrompt, .transcribing, .cleaning, .done:
+        case .readyPrompt, .transcribing, .cleaning:
             panel.ignoresMouseEvents = true
         }
     }
@@ -235,7 +236,7 @@ private struct OverlayContent: View {
             }
         }
         .frame(width: ChipLayout.windowWidth, height: ChipLayout.windowHeight)
-        .animation(.easeInOut(duration: 0.3), value: hoverTarget)
+        .animation(.smooth(duration: 0.25), value: hoverTarget)
     }
 
     /// The chip area — always in the same position, never moves
@@ -252,17 +253,14 @@ private struct OverlayContent: View {
         .animation(reduceMotion ? .none : .spring(response: 0.45, dampingFraction: 0.85), value: model.state)
     }
 
-    /// Suggestions/hints — slides in/out without moving the chip
+    /// Suggestions/hints — crossfades smoothly on hover changes
     @ViewBuilder
     private var suggestionsArea: some View {
         Group {
             hoverHint
         }
-        .transition(
-            AnyTransition.move(edge: isTopPosition ? .top : .bottom)
-                .combined(with: .opacity)
-        )
-        .animation(.easeInOut(duration: 0.35), value: hoverTarget)
+        .transition(.opacity)
+        .animation(.smooth(duration: 0.25), value: hoverTarget)
     }
 
     @ViewBuilder
@@ -288,9 +286,6 @@ private struct OverlayContent: View {
         case .transcribing, .cleaning:
             ProcessingChip(reduceMotion: reduceMotion)
                 .transition(.opacity)
-        case .done:
-            DoneChip()
-                .transition(.opacity.animation(.easeInOut(duration: 0.6)))
         case .cancelled:
             CancelledChip(onUndo: onUndo)
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
@@ -411,50 +406,45 @@ private struct ProcessingChip: View {
     }
 }
 
-// MARK: - Done Chip
-
-private struct DoneChip: View {
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<9, id: \.self) { _ in
-                Circle()
-                    .fill(Color.white.opacity(0.85))
-                    .frame(width: 2, height: 2)
-            }
-        }
-        .frame(width: ChipLayout.chipWidth, height: ChipLayout.chipHeight)
-        .background(ChipBackground(interactive: false))
-    }
-}
-
 // MARK: - Cancelled Chip
 
 private struct CancelledChip: View {
     let onUndo: () -> Void
-    @State private var progress: CGFloat = 1.0
-
-    private let prompt = RecordingOverlayPrompt(
-        prefix: "Cancelled ", hotkey: "Undo", suffix: ""
-    )
+    @State private var progress: CGFloat = 0.0
 
     var body: some View {
-        VStack(spacing: 4) {
-            Button(action: onUndo) {
-                PromptBubble(prompt: prompt)
-            }
-            .buttonStyle(.plain)
+        Button(action: onUndo) {
+            HStack(spacing: 8) {
+                Text("Cancelled")
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12, weight: .medium, design: .default))
 
-            // Progress countdown bar
-            GeometryReader { geo in
-                Capsule()
-                    .fill(Color.white.opacity(0.2))
-                    .frame(width: geo.size.width * progress, height: 2)
+                Text("Undo")
+                    .font(.system(size: 11, weight: .semibold, design: .default))
+                    .foregroundStyle(.tint)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .glassEffect(.regular.interactive(), in: Capsule())
             }
-            .frame(width: ChipLayout.chipWidth, height: 2)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .fixedSize()
+            .glassEffect(.regular, in: Capsule())
+            .overlay(alignment: .bottom) {
+                GeometryReader { geo in
+                    Rectangle()
+                        .fill(Color.white.opacity(0.25))
+                        .frame(width: geo.size.width * progress, height: 2)
+                }
+                .frame(height: 2)
+            }
+            .clipShape(Capsule())
         }
+        .buttonStyle(.plain)
         .onAppear {
-            withAnimation(.easeIn(duration: 3.0)) {
-                progress = 0.0
+            withAnimation(.easeOut(duration: 3.0)) {
+                progress = 1.0
             }
         }
     }
@@ -583,12 +573,6 @@ private struct PromptBubble: View {
         .background(Color(white: 0.15))
 }
 
-#Preview("Done Chip") {
-    DoneChip()
-        .padding(40)
-        .background(Color(white: 0.15))
-}
-
 #Preview("Cancelled Chip") {
     CancelledChip(onUndo: {})
         .padding(40)
@@ -614,8 +598,6 @@ private struct PromptBubble: View {
         )
 
         ProcessingChip()
-
-        DoneChip()
 
         CancelledChip(onUndo: {})
     }

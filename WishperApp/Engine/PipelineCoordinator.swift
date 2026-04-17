@@ -446,8 +446,7 @@ final class PipelineCoordinator {
                 let duration = recorder.duration
                 let appName = targetApp?.localizedName ?? "Unknown"
                 appState.stats.recordTranscription(text: cleaned, durationSeconds: duration, appName: appName)
-                overlay.show(state: .done)
-                scheduleOverlayHide(after: 0.9)
+                overlay.showIdle()
                 logger.info("injection succeeded")
                 if appState.soundsEnabled { sounds.done() }
             } else {
@@ -500,9 +499,6 @@ final class PipelineCoordinator {
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
             self?.overlay.showIdle()
-            self?.appState.statusMessage = "Ready"
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             self?.appState.statusMessage = "Ready"
         }
     }
