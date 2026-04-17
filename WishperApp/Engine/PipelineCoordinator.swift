@@ -25,6 +25,7 @@ final class PipelineCoordinator {
     private var overlayHideTask: Task<Void, Never>?
     private var overlayLevelTask: Task<Void, Never>?
     private var appDidBecomeActiveObserver: NSObjectProtocol?
+    private var runtimeConfigured = false
     private let logger = WishperLog.voicePipeline
 
     init(appState: AppState, memoryMonitor: MemoryMonitor) {
@@ -42,6 +43,7 @@ final class PipelineCoordinator {
 
         // Check microphone permission once at startup
         let micGranted = await AudioRecorder.checkMicPermission()
+        appState.microphonePermissionGranted = micGranted
         if !micGranted {
             appState.statusMessage = "Microphone access needed — check System Settings"
             logger.info("microphone access unavailable")
@@ -50,23 +52,91 @@ final class PipelineCoordinator {
             logger.info("microphone access available")
         }
 
-        // Load ASR + VAD eagerly (always needed for push-to-talk latency)
-        appState.statusMessage = "Loading ASR + VAD models..."
-        do {
-            try await streamingTranscriber.loadModel()
+        guard await prepareRequiredModels() else {
+            return
+        }
+
+        configureRuntimeIfNeeded(promptForHotkeyPermissions: promptForHotkeyPermissions)
+    }
+
+    func retryPreparation() {
+        Task { @MainActor in
+            await start(promptForHotkeyPermissions: false)
+        }
+    }
+
+    private func prepareRequiredModels() async -> Bool {
+        if await streamingTranscriber.isModelLoaded {
             memoryMonitor.asrModelLoaded = true
+            appState.modelPreparationPhase = .ready
+            appState.modelPreparationProgress = 1.0
+            appState.modelPreparationHeadline = "Wishper is ready"
+            appState.modelPreparationDetail = "Local speech recognition is installed and ready."
+            appState.modelPreparationError = nil
+            appState.statusMessage = appState.microphonePermissionGranted
+                ? "Ready"
+                : "Microphone access needed — check System Settings"
+            return true
+        }
 
-            // Load LLM only if cleanup is enabled (lazy otherwise)
-            if appState.cleanupEnabled {
-                appState.statusMessage = "Loading LLM model..."
-                try await cleaner.loadModel()
-                memoryMonitor.llmModelLoaded = true
+        appState.modelPreparationPhase = .preparing
+        appState.modelPreparationProgress = max(appState.modelPreparationProgress, 0.02)
+        appState.modelPreparationHeadline = "Preparing Wishper"
+        appState.modelPreparationDetail = "Downloading required local speech models."
+        appState.modelPreparationError = nil
+        appState.statusMessage = "Preparing speech models..."
+
+        do {
+            try await streamingTranscriber.loadModel { [weak self] progress in
+                Task { @MainActor [weak self] in
+                    self?.handleSpeechModelProgress(progress)
+                }
             }
-
-            appState.statusMessage = "Ready"
+            memoryMonitor.asrModelLoaded = true
+            appState.modelPreparationPhase = .ready
+            appState.modelPreparationProgress = 1.0
+            appState.modelPreparationHeadline = "Wishper is ready"
+            appState.modelPreparationDetail = "Local speech recognition is installed and ready."
+            appState.modelPreparationError = nil
+            appState.statusMessage = appState.microphonePermissionGranted
+                ? "Ready"
+                : "Microphone access needed — check System Settings"
+            return true
         } catch {
             logger.error("pipeline preflight failed")
+            appState.modelPreparationPhase = .failed
+            appState.modelPreparationHeadline = "Couldn’t prepare Wishper"
+            appState.modelPreparationDetail = "The local speech models failed to download or load."
+            appState.modelPreparationError = error.localizedDescription
             appState.statusMessage = "Model load failed: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func handleSpeechModelProgress(_ progress: SpeechModelLoadProgress) {
+        let phaseLabel: String
+        let overallProgress: Double
+
+        switch progress.phase {
+        case .asr:
+            phaseLabel = "Speech recognition"
+            overallProgress = min(max(progress.fractionCompleted, 0), 1) * 0.82
+        case .vad:
+            phaseLabel = "Voice activity detection"
+            overallProgress = 0.82 + (min(max(progress.fractionCompleted, 0), 1) * 0.18)
+        }
+
+        appState.modelPreparationPhase = .preparing
+        appState.modelPreparationProgress = overallProgress
+        appState.modelPreparationHeadline = "Preparing Wishper"
+        appState.modelPreparationDetail = "\(phaseLabel): \(progress.status)"
+        appState.modelPreparationError = nil
+        appState.statusMessage = "Preparing speech models..."
+    }
+
+    private func configureRuntimeIfNeeded(promptForHotkeyPermissions: Bool) {
+        guard !runtimeConfigured else {
+            refreshModifierDetector(promptForPermissions: promptForHotkeyPermissions)
             return
         }
 
@@ -178,6 +248,7 @@ final class PipelineCoordinator {
         logger.info("hotkeys registered: fn=PTT, ⌃Space=handsFree, ⌃⌘V=paste")
         showReadyPrompt()
         logger.info("keyboard shortcuts registered")
+        runtimeConfigured = true
     }
 
     func updateShortcutConfiguration(pushToTalkKey: String, cancelKey: String) {
