@@ -8,13 +8,14 @@ struct OnboardingView: View {
     var onComplete: () -> Void
 
     @State private var accessibilityGranted = AXIsProcessTrusted()
+    @State private var inputMonitoringGranted = CGPreflightListenEventAccess()
     @State private var microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
 
     private var modelsReady: Bool { appState.modelPreparationPhase == .ready }
     private var modelsFailed: Bool { appState.modelPreparationPhase == .failed }
 
     private var allDone: Bool {
-        accessibilityGranted && microphoneGranted && modelsReady
+        accessibilityGranted && inputMonitoringGranted && microphoneGranted && modelsReady
     }
 
     var body: some View {
@@ -50,6 +51,15 @@ struct OnboardingView: View {
                         status: accessibilityGranted ? .done : .action("Guide Me")
                     ) {
                         HotkeyPermissionGuide.openAccessibilityGuide()
+                    }
+
+                    checklistRow(
+                        icon: "keyboard",
+                        title: "Input Monitoring",
+                        description: "Detect fn and modifier key shortcuts",
+                        status: inputMonitoringGranted ? .done : .action("Enable")
+                    ) {
+                        HotkeyPermissionGuide.requestInputMonitoringAccess()
                     }
 
                     checklistRow(
@@ -237,6 +247,7 @@ struct OnboardingView: View {
 
     private func refreshPermissions() {
         accessibilityGranted = AXIsProcessTrusted()
+        inputMonitoringGranted = CGPreflightListenEventAccess()
         let mic = AVCaptureDevice.authorizationStatus(for: .audio)
         microphoneGranted = mic == .authorized
     }
