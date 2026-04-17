@@ -7,15 +7,17 @@ enum OnboardingStep: Int, CaseIterable {
     case welcome
     case permissions
     case microphone
-    case ready
+    case prepare
 }
 
 // MARK: - Onboarding View
 
 struct OnboardingView: View {
+    @ObservedObject var appState: AppState
     @State private var currentStep: OnboardingStep = .welcome
     @State private var hotkeyPermissionState = HotkeyPermissionGuide.currentState()
     @State private var microphoneGranted = false
+    var onRetryPreparation: () -> Void
     var onComplete: () -> Void
 
     var body: some View {
@@ -103,8 +105,8 @@ struct OnboardingView: View {
             permissionsStep
         case .microphone:
             microphoneStep
-        case .ready:
-            readyStep
+        case .prepare:
+            preparationStep
         }
     }
 
@@ -193,6 +195,7 @@ struct OnboardingView: View {
                 Button("Grant Microphone Access") {
                     Task {
                         microphoneGranted = await AVCaptureDevice.requestAccess(for: .audio)
+                        appState.microphonePermissionGranted = microphoneGranted
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -207,40 +210,83 @@ struct OnboardingView: View {
         .onAppear {
             let status = AVCaptureDevice.authorizationStatus(for: .audio)
             microphoneGranted = status == .authorized
+            appState.microphonePermissionGranted = microphoneGranted
         }
     }
 
-    private var readyStep: some View {
+    private var preparationStep: some View {
         VStack(spacing: 16) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.green)
-                .symbolEffect(.bounce, options: .nonRepeating)
+            preparationIconView
 
-            Text("You're All Set")
+            Text(appState.modelPreparationHeadline)
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
 
-            VStack(alignment: .leading, spacing: 10) {
-                shortcutHint("Hold", key: "fn", action: "to push-to-talk")
-                shortcutHint("Press", key: "fn Space", action: "for hands-free")
-                shortcutHint("Press", key: "⌃⌘V", action: "to paste last transcript")
+            Text(preparationDescription)
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+
+            if appState.modelPreparationPhase == .preparing || appState.modelPreparationPhase == .idle {
+                VStack(spacing: 10) {
+                    ProgressView(value: max(appState.modelPreparationProgress, 0.02), total: 1.0)
+                        .progressViewStyle(.linear)
+
+                    Text(progressFootnote)
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                )
             }
 
-            Text(hotkeyPermissionState.allGranted
-                 ? "Global hotkeys are ready."
-                 : "If fn or Right Command does not work, enable Wishper in Privacy & Security under Accessibility and Input Monitoring.")
-                .font(.system(size: 11, design: .rounded))
-                .foregroundStyle(hotkeyPermissionState.allGranted ? .green.opacity(0.9) : .white.opacity(0.55))
-                .multilineTextAlignment(.center)
-                .lineSpacing(3)
+            if appState.modelPreparationPhase == .failed {
+                VStack(spacing: 12) {
+                    Text(appState.modelPreparationError ?? "Unknown error")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.red.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
 
-            Text("Models will download on first use (~500MB)")
-                .font(.system(size: 11, design: .rounded))
-                .foregroundStyle(.white.opacity(0.4))
-                .padding(.top, 4)
+                    Button("Retry Download", action: onRetryPreparation)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.regular)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color.red.opacity(0.18), lineWidth: 1)
+                )
+            }
+
+            if appState.modelPreparationPhase == .ready {
+                VStack(alignment: .leading, spacing: 10) {
+                    shortcutHint("Hold", key: "fn", action: "to push-to-talk")
+                    shortcutHint("Press", key: "fn Space", action: "for hands-free")
+                    shortcutHint("Press", key: "⌃⌘V", action: "to paste last transcript")
+                }
+
+                Text(hotkeyPermissionState.allGranted
+                     ? "Global hotkeys are ready."
+                     : "If fn or Right Command does not work, enable Wishper in Privacy & Security under Accessibility and Input Monitoring.")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(hotkeyPermissionState.allGranted ? .green.opacity(0.9) : .white.opacity(0.55))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+            }
         }
         .padding(.horizontal, 40)
+        .onAppear(perform: refreshPermissionState)
     }
 
     private func shortcutHint(_ prefix: String, key: String, action: String) -> some View {
@@ -313,11 +359,77 @@ struct OnboardingView: View {
         case .welcome: "Get Started"
         case .permissions: hotkeyPermissionState.allGranted ? "Continue" : "Skip for Now"
         case .microphone: microphoneGranted ? "Continue" : "Skip for Now"
-        case .ready: "Start Using Wishper"
+        case .prepare:
+            switch appState.modelPreparationPhase {
+            case .ready: "Start Using Wishper"
+            case .failed: "Waiting for Retry"
+            case .idle, .preparing: "Preparing Models..."
+            }
         }
     }
 
-    private var buttonEnabled: Bool { true }
+    private var buttonEnabled: Bool {
+        switch currentStep {
+        case .prepare:
+            appState.modelPreparationPhase == .ready
+        default:
+            true
+        }
+    }
+
+    private var preparationIcon: String {
+        switch appState.modelPreparationPhase {
+        case .ready:
+            "checkmark.circle.fill"
+        case .failed:
+            "exclamationmark.triangle.fill"
+        case .idle, .preparing:
+            "arrow.down.circle.fill"
+        }
+    }
+
+    private var preparationAccent: Color {
+        switch appState.modelPreparationPhase {
+        case .ready:
+            .green
+        case .failed:
+            .red
+        case .idle, .preparing:
+            .white
+        }
+    }
+
+    @ViewBuilder
+    private var preparationIconView: some View {
+        let image = Image(systemName: preparationIcon)
+            .font(.system(size: 48))
+            .foregroundStyle(preparationAccent)
+
+        switch appState.modelPreparationPhase {
+        case .ready:
+            image.symbolEffect(.bounce, options: .nonRepeating)
+        case .failed:
+            image
+        case .idle, .preparing:
+            image.symbolEffect(.pulse, options: .repeating)
+        }
+    }
+
+    private var preparationDescription: String {
+        switch appState.modelPreparationPhase {
+        case .ready:
+            "Everything required for fast local dictation is installed on this Mac."
+        case .failed:
+            "Wishper needs its local speech models before first use. Retry the download to continue."
+        case .idle, .preparing:
+            "Wishper is downloading and loading the local speech models it needs before your first transcription."
+        }
+    }
+
+    private var progressFootnote: String {
+        let percent = Int(appState.modelPreparationProgress * 100)
+        return "\(appState.modelPreparationDetail)\n\(percent)% complete"
+    }
 
     private func advanceStep() {
         if let next = OnboardingStep(rawValue: currentStep.rawValue + 1) {
@@ -367,6 +479,6 @@ private final class ActivatingView: NSView {
 // MARK: - Preview
 
 #Preview {
-    OnboardingView(onComplete: {})
+    OnboardingView(appState: AppState(), onRetryPreparation: {}, onComplete: {})
         .frame(width: 480, height: 340)
 }
