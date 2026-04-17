@@ -136,7 +136,9 @@ final class PipelineCoordinator {
 
     private func configureRuntimeIfNeeded(promptForHotkeyPermissions: Bool) {
         guard !runtimeConfigured else {
-            refreshModifierDetector(promptForPermissions: promptForHotkeyPermissions)
+            if promptForHotkeyPermissions {
+                refreshModifierDetector(promptForPermissions: true)
+            }
             return
         }
 
@@ -211,7 +213,11 @@ final class PipelineCoordinator {
         modifierDetector.onCancel = { [weak self] in
             Task { @MainActor in self?.cancelRecording() }
         }
-        refreshModifierDetector(promptForPermissions: promptForHotkeyPermissions)
+        // Only start modifier detector after onboarding — avoids system
+        // permission dialogs before the checklist is shown
+        if promptForHotkeyPermissions {
+            refreshModifierDetector(promptForPermissions: true)
+        }
 
         appDidBecomeActiveObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
