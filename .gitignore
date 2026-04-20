@@ -1,11 +1,16 @@
 DerivedData/
 .build/
+.build-benchmark/
 .xcodebuild/
 *.xcuserdata/
 xcuserdata/
 .DS_Store
 *.ipa
+*.profraw
 dist/
+releases/
 .agents/
+.claude/
 plugins/
 docs/
+test-audio/
