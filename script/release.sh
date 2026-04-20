@@ -89,7 +89,7 @@ echo "[release] xcodebuild archive"
 xcodebuild \
     -scheme "$SCHEME" \
     -configuration "$CONFIG" \
-    -destination "generic/platform=macOS,arch=arm64" \
+    -destination "generic/platform=macOS" \
     -archivePath "$ARCHIVE_PATH" \
     archive \
     ARCHS=arm64 \
