@@ -52,7 +52,7 @@ struct OnboardingView: View {
             .padding(28)
             .frame(maxWidth: 460)
         }
-        .animation(.smooth(duration: 0.4), value: currentStep)
+        .animation(.smooth(duration: 0.3), value: currentStep)
         .onAppear(perform: refreshPermissions)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissions()

@@ -34,9 +34,14 @@ private enum ChipLayout {
     static let chipHeight: CGFloat = 36
     static let cornerRadius: CGFloat = 18
 
-    // Overlay window dimensions (fixed, transparent, never resizes)
+    // Fixed panel dimensions — keeps the chip pinned in place while the
+    // hint fades in/out in the transparent area around it.
     static let windowWidth: CGFloat = 280
     static let windowHeight: CGFloat = 140
+
+    // Distance between the chip and the panel's anchored edge (top for
+    // belowNotch, bottom for aboveDock).
+    static let chipInset: CGFloat = 2
 }
 
 // MARK: - Model
@@ -51,8 +56,6 @@ final class RecordingOverlayModel: ObservableObject {
     @Published var hotkeyLabel: String = "Right Command"
 }
 
-// MARK: - Click-Through Hosting View
-
 // MARK: - Controller
 
 @MainActor
@@ -60,6 +63,8 @@ final class RecordingOverlayController {
     private let panel: NSPanel
     private let model = RecordingOverlayModel()
     private let hostingView: NSHostingView<OverlayContent>
+    private var mouseMonitorLocal: Any?
+    private var mouseMonitorGlobal: Any?
 
     var onChipTapped: (() -> Void)?
     var onStopTapped: (() -> Void)?
@@ -67,12 +72,19 @@ final class RecordingOverlayController {
     var onUndoCancel: (() -> Void)?
 
     init() {
-        let content = OverlayContent(model: model, onTap: {}, onStop: {}, onCancel: {}, onUndo: {})
+        let panelSize = CGSize(width: ChipLayout.windowWidth, height: ChipLayout.windowHeight)
+        let content = OverlayContent(
+            model: model,
+            onTap: {},
+            onStop: {},
+            onCancel: {},
+            onUndo: {}
+        )
         hostingView = NSHostingView(rootView: content)
+        hostingView.frame = NSRect(origin: .zero, size: panelSize)
 
-        // Fixed panel size — tall enough for bar + suggestion chip above
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: ChipLayout.windowWidth, height: ChipLayout.windowHeight),
+            contentRect: NSRect(origin: .zero, size: panelSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -85,6 +97,7 @@ final class RecordingOverlayController {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
+
         panel.contentView = hostingView
 
         let wiredContent = OverlayContent(
@@ -99,6 +112,12 @@ final class RecordingOverlayController {
         updateMouseInteraction()
         positionPanel()
         showIdle()
+        installMouseMonitors()
+    }
+
+    deinit {
+        if let m = mouseMonitorLocal { NSEvent.removeMonitor(m) }
+        if let m = mouseMonitorGlobal { NSEvent.removeMonitor(m) }
     }
 
     func showIdle() {
@@ -160,13 +179,77 @@ final class RecordingOverlayController {
 
     // MARK: - Private
 
+    /// Panel accepts mouse events only in states where the chip has
+    /// interactive controls AND the cursor is hovering the chip rect.
+    /// When the cursor is in the transparent padding around the chip,
+    /// `ignoresMouseEvents = true` lets clicks pass through to apps behind.
     private func updateMouseInteraction() {
+        let stateInteractive: Bool
         switch model.state {
         case .idle, .recording, .cancelled:
-            panel.ignoresMouseEvents = false
+            stateInteractive = true
         case .readyPrompt, .transcribing, .cleaning:
-            panel.ignoresMouseEvents = true
+            stateInteractive = false
         }
+        guard stateInteractive else {
+            panel.ignoresMouseEvents = true
+            return
+        }
+        refreshHitTransparency()
+    }
+
+    /// Observes global and local mouse-moved events so we can flip the
+    /// panel between "click-through" and "capture" based on whether the
+    /// cursor is over the chip's visible rect. The panel itself never
+    /// resizes — this keeps the chip anchored — but only the chip sub-rect
+    /// is treated as live.
+    private func installMouseMonitors() {
+        mouseMonitorLocal = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+            self?.refreshHitTransparency()
+            return event
+        }
+        mouseMonitorGlobal = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] _ in
+            Task { @MainActor in self?.refreshHitTransparency() }
+        }
+    }
+
+    private func refreshHitTransparency() {
+        // Passive states always pass through.
+        switch model.state {
+        case .readyPrompt, .transcribing, .cleaning:
+            if !panel.ignoresMouseEvents { panel.ignoresMouseEvents = true }
+            return
+        default:
+            break
+        }
+
+        let mouseLocation = NSEvent.mouseLocation
+        let chipRect = chipScreenRect()
+        let shouldCapture = chipRect.contains(mouseLocation)
+
+        if panel.ignoresMouseEvents == shouldCapture {
+            panel.ignoresMouseEvents = !shouldCapture
+        }
+    }
+
+    /// The on-screen rectangle of the visible chip, in screen coordinates.
+    /// Tight to the chip's actual bounds so hover only activates when the
+    /// cursor is directly over the pill, not in the surrounding padding.
+    private func chipScreenRect() -> CGRect {
+        let panelFrame = panel.frame
+        let hitWidth = ChipLayout.chipWidth
+        let hitHeight = ChipLayout.chipHeight
+        let x = panelFrame.midX - hitWidth / 2
+
+        let y: CGFloat
+        switch model.chipPosition {
+        case .belowNotch:
+            // Chip sits at top of panel with 2pt inset; screen Y (bottom-up).
+            y = panelFrame.maxY - hitHeight - ChipLayout.chipInset
+        case .aboveDock:
+            y = panelFrame.minY + ChipLayout.chipInset
+        }
+        return CGRect(x: x, y: y, width: hitWidth, height: hitHeight)
     }
 
     private func positionPanel() {
@@ -179,9 +262,9 @@ final class RecordingOverlayController {
         let y: CGFloat
         switch model.chipPosition {
         case .belowNotch:
-            y = visibleFrame.maxY - h - 2
+            y = visibleFrame.maxY - h
         case .aboveDock:
-            y = visibleFrame.minY + 4
+            y = visibleFrame.minY
         }
 
         panel.setFrame(NSRect(x: x, y: y, width: w, height: h), display: true)
@@ -217,24 +300,27 @@ private struct OverlayContent: View {
         VStack(spacing: 0) {
             if isTopPosition {
                 chipArea
-                    .padding(.top, 4)
+                    .padding(.top, ChipLayout.chipInset)
 
-                suggestionsArea
-                    .padding(.top, 6)
+                if activePrompt != nil {
+                    suggestionsArea
+                        .padding(.top, 6)
+                }
 
                 Spacer(minLength: 0)
             } else {
                 Spacer(minLength: 0)
 
-                suggestionsArea
-                    .padding(.bottom, 6)
+                if activePrompt != nil {
+                    suggestionsArea
+                        .padding(.bottom, 6)
+                }
 
                 chipArea
-                    .padding(.bottom, 4)
+                    .padding(.bottom, ChipLayout.chipInset)
             }
         }
         .frame(width: ChipLayout.windowWidth, height: ChipLayout.windowHeight)
-        .animation(.smooth(duration: 0.25), value: hoverTarget)
     }
 
     /// The chip area — always in the same position, never moves
@@ -243,22 +329,31 @@ private struct OverlayContent: View {
         Group {
             if model.state == .idle {
                 IdleChip(onTap: onTap, hotkeyLabel: model.hotkeyLabel, growsDown: isTopPosition)
-                    .onHover { h in hoverTarget = h ? .idle : nil }
+                    .onHover { h in setHover(.idle, on: h) }
             } else {
                 activeChip
             }
         }
-        .animation(reduceMotion ? .none : .spring(response: 0.45, dampingFraction: 0.85), value: model.state)
+        .animation(reduceMotion ? .none : .smooth(duration: 0.25), value: model.state)
     }
 
-    /// Suggestions/hints — crossfades smoothly on hover changes
+    /// Suggestions/hints — fade the hint in/out without animating the
+    /// enclosing VStack's size. The hint appears as a conditional child with
+    /// an opacity transition; the fade is driven at the callsite via
+    /// `withAnimation`, not by a view-level `.animation(value:)` — that would
+    /// also animate the VStack's layout and shift the chip during hover.
     @ViewBuilder
     private var suggestionsArea: some View {
         Group {
             hoverHint
         }
         .transition(.opacity)
-        .animation(.smooth(duration: 0.25), value: hoverTarget)
+    }
+
+    private func setHover(_ target: HoverTarget, on: Bool) {
+        withAnimation(.smooth(duration: 0.2)) {
+            hoverTarget = on ? target : nil
+        }
     }
 
     @ViewBuilder
@@ -277,16 +372,16 @@ private struct OverlayContent: View {
                 onCancel: onCancel,
                 onStop: onStop,
                 reduceMotion: reduceMotion,
-                onCancelHover: { h in hoverTarget = h ? .cancel : nil },
-                onStopHover: { h in hoverTarget = h ? .stop : nil }
+                onCancelHover: { h in setHover(.cancel, on: h) },
+                onStopHover: { h in setHover(.stop, on: h) }
             )
-            .transition(.scale(scale: 0.9).combined(with: .opacity))
+            .transition(.opacity)
         case .transcribing, .cleaning:
             ProcessingChip(reduceMotion: reduceMotion)
                 .transition(.opacity)
         case .cancelled:
             CancelledChip(onUndo: onUndo)
-                .transition(.scale(scale: 0.95).combined(with: .opacity))
+                .transition(.opacity)
         }
     }
 
@@ -333,17 +428,22 @@ private struct IdleChip: View {
 
     var body: some View {
         ZStack {
-            ChipBackground()
+            Color.clear
+                .frame(width: 120, height: 24)
 
-            Capsule(style: .continuous)
-                .fill(Color.primary.opacity(isHovering ? 0.42 : 0.24))
-                .frame(width: isHovering ? 18 : 14, height: 3)
+            ZStack {
+                ChipBackground()
+
+                Capsule(style: .continuous)
+                    .fill(Color.primary.opacity(isHovering ? 0.42 : 0.24))
+                    .frame(width: isHovering ? 18 : 14, height: 3)
+            }
+            .frame(width: 44, height: 12)
         }
-        .frame(width: 44, height: 12)
-        .contentShape(Rectangle().size(width: 120, height: 24).offset(x: -38, y: -6))
+        .contentShape(Rectangle())
         .onTapGesture { onTap() }
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
             }
         }
@@ -471,12 +571,7 @@ private struct RecordingLevelBars: View {
             }
         }
         .frame(height: 16)
-        .animation(
-            reduceMotion
-                ? .easeOut(duration: 0.1)
-                : .interactiveSpring(response: 0.12, dampingFraction: 0.84, blendDuration: 0.06),
-            value: resolvedLevels
-        )
+        .animation(.easeOut(duration: 0.1), value: resolvedLevels)
     }
 
     private var normalizedLevels: [CGFloat] {

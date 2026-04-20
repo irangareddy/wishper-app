@@ -32,6 +32,7 @@ actor StreamingTranscriber {
     private var vadProcessor: StreamingVADProcessor?
     private var audioBuffer: [Float] = []
     private var currentSpeechStartSample: Int?
+    private var lastTranscribedEndSample: Int = 0
     private var finalizedSegments: [String] = []
     private var segmentCount = 0
     private var language: String = "en"
@@ -90,6 +91,7 @@ actor StreamingTranscriber {
         audioBuffer = []
         finalizedSegments = []
         currentSpeechStartSample = nil
+        lastTranscribedEndSample = 0
         segmentCount = 0
         vadProcessor = StreamingVADProcessor(model: vadModel, config: .sileroDefault)
         logger.info("streaming session started language=\(language)")
@@ -114,12 +116,15 @@ actor StreamingTranscriber {
                 onSpeechActivity?(false)
                 guard let startSample = currentSpeechStartSample else { continue }
                 let endSample = min(Int(segment.endTime * Float(SileroVADModel.sampleRate)), audioBuffer.count)
-                guard startSample < endSample else {
+                // Clamp start to just past the last transcribed sample so
+                // overlapping VAD windows don't double-transcribe audio.
+                let effectiveStart = max(startSample, lastTranscribedEndSample)
+                guard effectiveStart < endSample else {
                     currentSpeechStartSample = nil
                     continue
                 }
 
-                let segmentAudio = Array(audioBuffer[startSample..<endSample])
+                let segmentAudio = Array(audioBuffer[effectiveStart..<endSample])
                 let text = asrModel.transcribe(audio: segmentAudio, sampleRate: SileroVADModel.sampleRate, language: language)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -129,6 +134,7 @@ actor StreamingTranscriber {
                     logger.info("segment \(self.segmentCount) transcribed: \(text.prefix(50))... (\(segmentAudio.count / SileroVADModel.sampleRate)s)")
                     onSegmentFinalized?(text)
                 }
+                lastTranscribedEndSample = endSample
                 currentSpeechStartSample = nil
             }
         }
@@ -152,12 +158,13 @@ actor StreamingTranscriber {
             case .speechEnded(let segment):
                 guard let startSample = currentSpeechStartSample else { continue }
                 let endSample = min(Int(segment.endTime * Float(SileroVADModel.sampleRate)), audioBuffer.count)
-                guard startSample < endSample else {
+                let effectiveStart = max(startSample, lastTranscribedEndSample)
+                guard effectiveStart < endSample else {
                     currentSpeechStartSample = nil
                     continue
                 }
 
-                let segmentAudio = Array(audioBuffer[startSample..<endSample])
+                let segmentAudio = Array(audioBuffer[effectiveStart..<endSample])
                 let text = asrModel.transcribe(audio: segmentAudio, sampleRate: SileroVADModel.sampleRate, language: language)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -166,6 +173,7 @@ actor StreamingTranscriber {
                     segmentCount += 1
                     logger.info("final segment \(self.segmentCount) transcribed")
                 }
+                lastTranscribedEndSample = endSample
                 currentSpeechStartSample = nil
             }
         }
