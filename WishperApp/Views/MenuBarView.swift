@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MenuBarMenu: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var updater = UpdaterManager.shared
     var onOpenWindow: () -> Void = {}
     @State private var currentTime = Date()
     @State private var injector = TextInjector()
@@ -49,6 +50,13 @@ struct MenuBarMenu: View {
         // Quick toggles
         Toggle("LLM Cleanup", isOn: $appState.cleanupEnabled)
         Toggle("Sounds", isOn: $appState.soundsEnabled)
+
+        Divider()
+
+        Button("Check for Updates…") {
+            updater.checkForUpdates()
+        }
+        .disabled(!updater.canCheckForUpdates)
 
         Divider()
 

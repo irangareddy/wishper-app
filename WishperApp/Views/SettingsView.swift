@@ -22,6 +22,7 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
 struct SettingsDetailView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var updater = UpdaterManager.shared
     @AppStorage("launchAtLoginEnabled") private var launchAtLoginEnabled = false
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .dark
     @State private var launchAtLoginError: String?
@@ -167,6 +168,26 @@ struct SettingsDetailView: View {
                 Text("Advanced")
             }
 
+            // ── Updates ──
+            Section {
+                Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
+
+                LabeledContent("Last checked") {
+                    Text(lastCheckedText)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Spacer()
+                    Button("Check Now") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text("Updates are signed with EdDSA and delivered via Sparkle.")
+            }
+
             // ── About ──
             Section {
                 LabeledContent("Version") {
@@ -218,6 +239,15 @@ struct SettingsDetailView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionState()
         }
+    }
+
+    // MARK: - Computed
+
+    private var lastCheckedText: String {
+        guard let date = updater.lastUpdateCheckDate else { return "Never" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     // MARK: - Row Builders

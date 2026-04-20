@@ -12,8 +12,8 @@
 		1D29B8E82F8AC77D000EE34A /* Qwen3ASR in Frameworks */ = {isa = PBXBuildFile; productRef = 1D29B8E72F8AC77D000EE34A /* Qwen3ASR */; };
 		1D29B8EA2F8AC77D000EE34A /* SpeechVAD in Frameworks */ = {isa = PBXBuildFile; productRef = 1D29B8E92F8AC77D000EE34A /* SpeechVAD */; };
 		1D29B8ED2F8ACA97000EE34A /* MLXFast in Frameworks */ = {isa = PBXBuildFile; productRef = 1D29B8EC2F8ACA97000EE34A /* MLXFast */; };
+		1D85F7342F96CDD400F880CD /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 1D85F7332F96CDD400F880CD /* Sparkle */; };
 		1DD8CE4B2F90A661001BCC30 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 1DD8CE4A2F90A661001BCC30 /* KeyboardShortcuts */; };
-
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,13 +75,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1D85F7342F96CDD400F880CD /* Sparkle in Frameworks */,
 				1D29B8EA2F8AC77D000EE34A /* SpeechVAD in Frameworks */,
 				1D29B8E52F8AC67E000EE34A /* MLXLMCommon in Frameworks */,
 				1D29B8E82F8AC77D000EE34A /* Qwen3ASR in Frameworks */,
 				1D29B8ED2F8ACA97000EE34A /* MLXFast in Frameworks */,
 				1D29B8E32F8AC67E000EE34A /* MLXLLM in Frameworks */,
 				1DD8CE4B2F90A661001BCC30 /* KeyboardShortcuts in Frameworks */,
-
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,7 +148,7 @@
 				1D29B8E92F8AC77D000EE34A /* SpeechVAD */,
 				1D29B8EC2F8ACA97000EE34A /* MLXFast */,
 				1DD8CE4A2F90A661001BCC30 /* KeyboardShortcuts */,
-
+				1D85F7332F96CDD400F880CD /* Sparkle */,
 			);
 			productName = WishperApp;
 			productReference = 1D04487F2F8AC1C600801B60 /* Wishper.app */;
@@ -237,7 +237,7 @@
 				1D29B8E62F8AC77D000EE34A /* XCRemoteSwiftPackageReference "speech-swift" */,
 				1D29B8EB2F8ACA96000EE34A /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				1DD8CE492F90A661001BCC30 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
-
+				1D85F7322F96CDD400F880CD /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1D0448802F8AC1C600801B60 /* Products */;
@@ -455,11 +455,6 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WishperApp/Info.plist;
@@ -510,11 +505,6 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WishperApp/Info.plist;
@@ -697,6 +687,14 @@
 				minimumVersion = 0.31.3;
 			};
 		};
+		1D85F7322F96CDD400F880CD /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.1;
+			};
+		};
 		1DD8CE492F90A661001BCC30 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
@@ -705,7 +703,6 @@
 				minimumVersion = 2.4.0;
 			};
 		};
-
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -734,12 +731,16 @@
 			package = 1D29B8EB2F8ACA96000EE34A /* XCRemoteSwiftPackageReference "mlx-swift" */;
 			productName = MLXFast;
 		};
+		1D85F7332F96CDD400F880CD /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1D85F7322F96CDD400F880CD /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		1DD8CE4A2F90A661001BCC30 /* KeyboardShortcuts */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 1DD8CE492F90A661001BCC30 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
 		};
-
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1D0448772F8AC1C600801B60 /* Project object */;

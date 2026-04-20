@@ -51,5 +51,15 @@
             </array>
         </dict>
     </array>
+    <key>SUFeedURL</key>
+    <string>https://github.com/irangareddy/wishper-app/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>PxlkwjI13oH21H8W4ylD/P82Y/Q7u1TBLCNyEYlRdw8=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
 </dict>
 </plist>
