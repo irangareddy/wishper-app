@@ -66,7 +66,7 @@ struct WishperApp: App {
                 }
             }
         }
-        .defaultSize(width: isSetupComplete ? 660 : 540, height: isSetupComplete ? 500 : 560)
+        .defaultSize(width: isSetupComplete ? 660 : 500, height: isSetupComplete ? 500 : 480)
         .windowResizability(isSetupComplete ? .contentMinSize : .contentSize)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
@@ -78,10 +78,13 @@ struct WishperApp: App {
     }
 
     init() {
-        // Apply saved appearance mode
+        // Apply saved appearance mode after NSApp is available
         let savedMode = UserDefaults.standard.string(forKey: "appearanceMode") ?? "Dark"
         if let mode = AppearanceMode(rawValue: savedMode) {
-            NSApp.appearance = mode.appearance
+            let appearance = mode.appearance
+            Task { @MainActor in
+                NSApp.appearance = appearance
+            }
         }
 
         let state = AppState()

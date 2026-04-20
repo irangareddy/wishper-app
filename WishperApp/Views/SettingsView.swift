@@ -169,9 +169,26 @@ struct SettingsDetailView: View {
 
             // ── About ──
             Section {
-                LabeledContent("Version", value: "0.4.0")
+                LabeledContent("Version") {
+                    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+                    let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+                    Text("\(version) (\(build))")
+                        .foregroundStyle(.secondary)
+                }
                 LabeledContent("Engine", value: "MLX on Apple Silicon")
+                LabeledContent("Requires", value: "macOS 15+ (Apple Silicon)")
                 LabeledContent("Privacy", value: "100% on-device")
+                LabeledContent("Developer") {
+                    Link(destination: URL(string: "https://github.com/irangareddy")!) {
+                        HStack(spacing: 4) {
+                            Text("Ranga Reddy")
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
             } header: {
                 Text("About")
             }
@@ -183,7 +200,6 @@ struct SettingsDetailView: View {
                 acknowledgmentRow("speech-swift", by: "soniqo", url: "https://github.com/soniqo/speech-swift")
                 acknowledgmentRow("swift-transformers", by: "Hugging Face", url: "https://github.com/huggingface/swift-transformers")
                 acknowledgmentRow("KeyboardShortcuts", by: "Sindre Sorhus", url: "https://github.com/sindresorhus/KeyboardShortcuts")
-                acknowledgmentRow("Permiso", by: "zats", url: "https://github.com/zats/permiso")
             } header: {
                 Text("Acknowledgments")
             } footer: {

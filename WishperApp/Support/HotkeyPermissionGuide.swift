@@ -1,7 +1,6 @@
 import AppKit
 import CoreGraphics
 import Foundation
-import Permiso
 
 struct HotkeyPermissionState {
     let accessibilityGranted: Bool
@@ -22,7 +21,7 @@ enum HotkeyPermissionGuide {
 
     @MainActor
     static func openAccessibilityGuide() {
-        PermisoAssistant.shared.present(panel: .accessibility)
+        openAccessibilitySettings()
     }
 
     @MainActor
@@ -33,6 +32,21 @@ enum HotkeyPermissionGuide {
             openInputMonitoringSettings()
         }
         return granted
+    }
+
+    @MainActor
+    static func openAccessibilitySettings() {
+        let candidates = [
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility",
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+        ]
+
+        for candidate in candidates {
+            guard let url = URL(string: candidate) else { continue }
+            if NSWorkspace.shared.open(url) {
+                return
+            }
+        }
     }
 
     @MainActor

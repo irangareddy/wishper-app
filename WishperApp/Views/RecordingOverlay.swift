@@ -315,7 +315,7 @@ private struct ChipBackground: View {
 
     var body: some View {
         Color.clear
-            .glassEffect(interactive ? .regular.interactive() : .regular, in: Capsule())
+            .adaptiveGlass(interactive: interactive, in: Capsule())
             .overlay {
                 Capsule()
                     .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
@@ -422,13 +422,13 @@ private struct CancelledChip: View {
                     .foregroundStyle(.tint)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .glassEffect(.regular.interactive(), in: Capsule())
+                    .adaptiveInteractiveGlass(in: Capsule())
             }
             .lineLimit(1)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .fixedSize()
-            .glassEffect(.regular, in: Capsule())
+            .adaptiveGlass(in: Capsule())
             .overlay(alignment: .bottom) {
                 GeometryReader { geo in
                     Rectangle()
@@ -537,7 +537,7 @@ private struct PromptBubble: View {
         .lineLimit(1)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .glassEffect(.regular, in: Capsule())
+        .adaptiveGlass(in: Capsule())
     }
 }
 

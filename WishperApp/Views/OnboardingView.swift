@@ -5,6 +5,7 @@ struct OnboardingView: View {
     @ObservedObject var appState: AppState
     var onComplete: () -> Void
 
+    @State private var currentStep = 0
     @State private var accessibilityGranted = AXIsProcessTrusted()
     @State private var inputMonitoringGranted = CGPreflightListenEventAccess()
     @State private var microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
@@ -13,8 +14,8 @@ struct OnboardingView: View {
     private var modelsFailed: Bool { appState.modelPreparationPhase == .failed }
     private var modelProgress: Double { max(appState.modelPreparationProgress, 0.03) }
 
-    private var allDone: Bool {
-        accessibilityGranted && inputMonitoringGranted && microphoneGranted && modelsReady
+    private var permissionsComplete: Bool {
+        accessibilityGranted && inputMonitoringGranted && microphoneGranted
     }
 
     var body: some View {
@@ -22,35 +23,307 @@ struct OnboardingView: View {
             shaderBackground
             ambientHighlights
 
-            ScrollView(.vertical, showsIndicators: false) {
-                GlassEffectContainer(spacing: 18) {
-                    VStack(spacing: 18) {
-                        heroPanel
-                        checklistPanel
-                        footerPanel
-                    }
-                    .padding(24)
+            VStack(spacing: 0) {
+                // Step indicator
+                if currentStep > 0 {
+                    stepIndicator
+                        .padding(.top, 16)
+                        .padding(.bottom, 8)
                 }
-                .frame(maxWidth: 490)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 28)
+
+                Spacer(minLength: 0)
+
+                // Step content
+                Group {
+                    switch currentStep {
+                    case 0: welcomeStep
+                    case 1: permissionsStep
+                    case 2: modelsStep
+                    default: doneStep
+                    }
+                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(28)
+            .frame(maxWidth: 460)
         }
-        .frame(
-            minWidth: 520,
-            idealWidth: 540,
-            maxWidth: 620,
-            minHeight: 520,
-            idealHeight: 560,
-            maxHeight: 760,
-            alignment: .top
-        )
+        .animation(.smooth(duration: 0.4), value: currentStep)
         .onAppear(perform: refreshPermissions)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissions()
+            autoAdvance()
+        }
+        .onChange(of: appState.modelPreparationPhase) { _, _ in
+            autoAdvance()
         }
     }
+
+    // MARK: - Step Indicator
+
+    private var stepIndicator: some View {
+        HStack(spacing: 6) {
+            ForEach(1...3, id: \.self) { step in
+                Capsule()
+                    .fill(step <= currentStep ? Color.white.opacity(0.6) : Color.white.opacity(0.15))
+                    .frame(width: step == currentStep ? 20 : 8, height: 4)
+            }
+        }
+        .animation(.smooth(duration: 0.3), value: currentStep)
+    }
+
+    // MARK: - Step 0: Welcome
+
+    private var welcomeStep: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "waveform.and.mic")
+                .font(.system(size: 44, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .padding(24)
+                .adaptiveGlass(in: Circle())
+
+            VStack(spacing: 10) {
+                Text("Set Up Wishper")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+
+                Text("Private, on-device voice-to-text.\nGrant a few permissions and you're ready to dictate.")
+                    .font(.system(size: 14, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+            }
+
+            Button("Get Started") {
+                currentStep = 1
+            }
+            .adaptiveGlassProminentButtonStyle()
+            .controlSize(.large)
+            .padding(.top, 8)
+        }
+    }
+
+    // MARK: - Step 1: Permissions
+
+    private var permissionsStep: some View {
+        VStack(spacing: 20) {
+            VStack(spacing: 6) {
+                Text("Permissions")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                Text("Wishper needs these to work globally on your Mac.")
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 0) {
+                permissionRow(
+                    icon: "figure.wave",
+                    iconTint: accessibilityGranted ? .green : .primary,
+                    title: "Accessibility",
+                    description: "Insert text into the active app.",
+                    granted: accessibilityGranted
+                ) {
+                    HotkeyPermissionGuide.openAccessibilityGuide()
+                }
+
+                divider
+
+                permissionRow(
+                    icon: "keyboard",
+                    iconTint: inputMonitoringGranted ? .green : .primary,
+                    title: "Input Monitoring",
+                    description: "Detect push-to-talk shortcuts globally.",
+                    granted: inputMonitoringGranted
+                ) {
+                    _ = HotkeyPermissionGuide.requestInputMonitoringAccess()
+                }
+
+                divider
+
+                permissionRow(
+                    icon: "mic.fill",
+                    iconTint: microphoneGranted ? .green : .primary,
+                    title: "Microphone",
+                    description: "Record audio locally on your Mac.",
+                    granted: microphoneGranted
+                ) {
+                    Task {
+                        microphoneGranted = await AVCaptureDevice.requestAccess(for: .audio)
+                        appState.microphonePermissionGranted = microphoneGranted
+                    }
+                }
+            }
+            .padding(.vertical, 6)
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            if permissionsComplete {
+                Button("Continue") {
+                    currentStep = 2
+                }
+                .adaptiveGlassProminentButtonStyle()
+                .controlSize(.large)
+                .padding(.top, 4)
+            } else {
+                Button("Continue Anyway") {
+                    currentStep = 2
+                }
+                .adaptiveGlassButtonStyle()
+                .controlSize(.large)
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    // MARK: - Step 2: Models
+
+    private var modelsStep: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 6) {
+                Text("Speech Models")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                Text("Downloading local ASR and VAD models for on-device transcription.")
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            VStack(spacing: 16) {
+                if modelsReady {
+                    Label("Models ready", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.green)
+                } else if modelsFailed {
+                    VStack(spacing: 8) {
+                        Label("Download failed", systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.red)
+
+                        if let error = appState.modelPreparationError {
+                            Text(error)
+                                .font(.system(size: 11, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+
+                        Button("Retry") {
+                            appState.coordinator?.retryPreparation()
+                        }
+                        .adaptiveGlassButtonStyle()
+                        .controlSize(.small)
+                        .tint(.red)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text(appState.modelPreparationDetail)
+                                .font(.system(size: 12, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+
+                            Spacer(minLength: 12)
+
+                            Text("\(Int(modelProgress * 100))%")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+
+                        ProgressView(value: modelProgress, total: 1.0)
+                            .progressViewStyle(.linear)
+                    }
+                    .padding(20)
+                    .adaptiveGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+            }
+
+            if modelsReady {
+                Button("Continue") {
+                    currentStep = 3
+                }
+                .adaptiveGlassProminentButtonStyle()
+                .controlSize(.large)
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    // MARK: - Step 3: Done
+
+    private var doneStep: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.green)
+
+            VStack(spacing: 10) {
+                Text("You're All Set")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+
+                Text("Hold your push-to-talk key to start dictating.\nWishper lives in your menu bar.")
+                    .font(.system(size: 14, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+            }
+
+            Button("Start Using Wishper", action: onComplete)
+                .adaptiveGlassProminentButtonStyle()
+                .controlSize(.large)
+                .padding(.top, 8)
+        }
+    }
+
+    // MARK: - Shared Components
+
+    private func permissionRow(
+        icon: String,
+        iconTint: Color,
+        title: String,
+        description: String,
+        granted: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(iconTint)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                Text(description)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 12)
+
+            if granted {
+                Label("Ready", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.green)
+                    .labelStyle(.titleAndIcon)
+            } else {
+                Button(title == "Accessibility" ? "Guide Me" : "Grant", action: action)
+                    .adaptiveGlassButtonStyle()
+                    .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+    }
+
+    private var divider: some View {
+        Divider()
+            .overlay(Color.white.opacity(0.08))
+            .padding(.horizontal, 18)
+    }
+
+    // MARK: - Background
 
     private var shaderBackground: some View {
         GeometryReader { geo in
@@ -73,7 +346,7 @@ struct OnboardingView: View {
                             .float(Float(time))
                         )
                     )
-                    .opacity(0.2)
+                    .opacity(0.45)
             }
         }
         .ignoresSafeArea()
@@ -96,249 +369,7 @@ struct OnboardingView: View {
         .allowsHitTesting(false)
     }
 
-    private var heroPanel: some View {
-        HStack(alignment: .top, spacing: 18) {
-            VStack(alignment: .leading, spacing: 10) {
-                Label("Private on-device setup", systemImage: "lock.badge.waveform")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                Text("Set Up Wishper")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-
-                Text("Grant the required permissions, let Wishper prepare local speech models, and then start dictating without leaving your Mac.")
-                    .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "waveform.and.mic")
-                .font(.system(size: 28, weight: .semibold))
-                .symbolRenderingMode(.hierarchical)
-                .padding(18)
-                .glassEffect(.regular, in: Circle())
-        }
-        .padding(24)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-    }
-
-    private var checklistPanel: some View {
-        VStack(spacing: 0) {
-            checklistRow(
-                icon: "figure.wave",
-                iconTint: accessibilityGranted ? .green : .primary,
-                title: "Accessibility",
-                description: "Needed to insert text into the app you are dictating into.",
-                status: accessibilityGranted ? .done : .action("Guide Me")
-            ) {
-                HotkeyPermissionGuide.openAccessibilityGuide()
-            }
-
-            divider
-
-            checklistRow(
-                icon: "keyboard",
-                iconTint: inputMonitoringGranted ? .green : .primary,
-                title: "Input Monitoring",
-                description: "Needed to detect fn and modifier-key push-to-talk shortcuts globally.",
-                status: inputMonitoringGranted ? .done : .action("Enable")
-            ) {
-                _ = HotkeyPermissionGuide.requestInputMonitoringAccess()
-            }
-
-            divider
-
-            checklistRow(
-                icon: "mic.fill",
-                iconTint: microphoneGranted ? .green : .primary,
-                title: "Microphone",
-                description: "Wishper records locally and never sends raw audio to a server.",
-                status: microphoneGranted ? .done : .action("Grant")
-            ) {
-                Task {
-                    microphoneGranted = await AVCaptureDevice.requestAccess(for: .audio)
-                    appState.microphonePermissionGranted = microphoneGranted
-                }
-            }
-
-            divider
-
-            checklistRow(
-                icon: "shippingbox.fill",
-                iconTint: modelIconTint,
-                title: "Speech Models",
-                description: "Required local ASR and VAD models for the first transcription.",
-                status: modelStatus
-            ) {
-                appState.coordinator?.retryPreparation()
-            }
-
-            if appState.modelPreparationPhase == .preparing || appState.modelPreparationPhase == .idle {
-                divider
-
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(appState.modelPreparationDetail)
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-
-                        Spacer(minLength: 12)
-
-                        Text("\(Int(modelProgress * 100))%")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-
-                    ProgressView(value: modelProgress, total: 1.0)
-                        .progressViewStyle(.linear)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-            }
-
-            if modelsFailed, let error = appState.modelPreparationError {
-                divider
-
-                Text(error)
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-            }
-        }
-        .padding(.vertical, 6)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-    }
-
-    private var footerPanel: some View {
-        VStack(spacing: 12) {
-            if allDone {
-                Button("Start Using Wishper", action: onComplete)
-                    .buttonStyle(.glassProminent)
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity)
-            } else {
-                Text(footerMessage)
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.horizontal, allDone ? 0 : 8)
-    }
-
-    private var divider: some View {
-        Divider()
-            .overlay(Color.white.opacity(0.08))
-            .padding(.horizontal, 20)
-    }
-
-    private var footerMessage: String {
-        if modelsFailed {
-            return "Retry the speech model download to finish setup."
-        }
-        return "Complete the four items above to unlock dictation."
-    }
-
-    private var modelIconTint: Color {
-        switch appState.modelPreparationPhase {
-        case .ready:
-            .green
-        case .failed:
-            .red
-        case .idle, .preparing:
-            .accentColor
-        }
-    }
-
-    private var modelStatus: RowStatus {
-        switch appState.modelPreparationPhase {
-        case .ready:
-            .done
-        case .failed:
-            .failed("Retry")
-        case .idle:
-            .progress(modelProgress, "Queued")
-        case .preparing:
-            .progress(modelProgress, "Preparing")
-        }
-    }
-
-    private enum RowStatus {
-        case done
-        case action(String)
-        case progress(Double, String)
-        case failed(String)
-    }
-
-    private func checklistRow(
-        icon: String,
-        iconTint: Color,
-        title: String,
-        description: String,
-        status: RowStatus,
-        action: @escaping () -> Void
-    ) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(iconTint)
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                Text(description)
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 12)
-
-            statusBadge(status, action: action)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-    }
-
-    @ViewBuilder
-    private func statusBadge(_ status: RowStatus, action: @escaping () -> Void) -> some View {
-        switch status {
-        case .done:
-            Label("Ready", systemImage: "checkmark.circle.fill")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(.green)
-                .labelStyle(.titleAndIcon)
-        case .action(let label):
-            Button(label, action: action)
-                .buttonStyle(.glass)
-                .controlSize(.small)
-        case .progress(let progress, let label):
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(label)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                Text("\(Int(progress * 100))%")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-        case .failed(let label):
-            Button(label, action: action)
-                .buttonStyle(.glass)
-                .controlSize(.small)
-                .tint(.red)
-        }
-    }
+    // MARK: - Logic
 
     private func refreshPermissions() {
         accessibilityGranted = AXIsProcessTrusted()
@@ -347,9 +378,18 @@ struct OnboardingView: View {
         microphoneGranted = mic == .authorized
         appState.microphonePermissionGranted = microphoneGranted
     }
+
+    private func autoAdvance() {
+        if currentStep == 1 && permissionsComplete {
+            currentStep = 2
+        }
+        if currentStep == 2 && modelsReady {
+            currentStep = 3
+        }
+    }
 }
 
 #Preview {
     OnboardingView(appState: AppState(), onComplete: {})
-        .frame(width: 540, height: 520)
+        .frame(width: 540, height: 480)
 }

@@ -30,7 +30,16 @@ struct HomeView: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            GlassEffectContainer(spacing: 12) {
+            if #available(macOS 26, *) {
+                GlassEffectContainer(spacing: 12) {
+                    HStack(spacing: 12) {
+                        StatCard(value: "\(appState.stats.weeklyStreak)", label: "Week Streak")
+                        StatCard(value: "\(appState.stats.averageWPM)", label: "Avg WPM")
+                        StatCard(value: formatNumber(appState.stats.totalWords), label: "Total Words")
+                        StatCard(value: "\(appState.stats.appsUsed.count)", label: "Apps Used")
+                    }
+                }
+            } else {
                 HStack(spacing: 12) {
                     StatCard(value: "\(appState.stats.weeklyStreak)", label: "Week Streak")
                     StatCard(value: "\(appState.stats.averageWPM)", label: "Avg WPM")
@@ -159,7 +168,7 @@ private struct StatCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
