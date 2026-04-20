@@ -131,12 +131,18 @@ echo "[release] generating appcast"
 "$PROJECT_DIR/script/appcast.sh" "$RELEASE_DIR"
 APPCAST_PATH="$RELEASE_DIR/appcast.xml"
 
-# ---------- git commit + tag ----------
+# ---------- git commit + tag + push ----------
 
 echo "[release] committing version bump and tagging $TAG"
-git add WishperApp/Info.plist
+git add WishperApp/Info.plist WishperApp.xcodeproj/project.pbxproj
 git commit -m "Release $VERSION ($BUILD)"
 git tag -a "$TAG" -m "Wishper $VERSION"
+
+# Push the branch and tag BEFORE creating the GitHub release so
+# `gh release create` finds the tag on the remote.
+echo "[release] pushing branch + tag to origin"
+git push origin HEAD
+git push origin "$TAG"
 
 # ---------- gh release ----------
 
@@ -146,11 +152,6 @@ gh release create "$TAG" \
     --notes "Auto-generated release. See commit history for changes." \
     "$DMG_PATH" \
     "$APPCAST_PATH"
-
-# ---------- push ----------
-
-echo "[release] pushing to origin"
-git push --follow-tags
 
 echo ""
 echo "[release] ✓ Wishper $VERSION ($BUILD) shipped"
