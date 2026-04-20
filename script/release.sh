@@ -89,13 +89,15 @@ echo "[release] xcodebuild archive"
 xcodebuild \
     -scheme "$SCHEME" \
     -configuration "$CONFIG" \
-    -destination "generic/platform=macOS" \
+    -destination "generic/platform=macOS,arch=arm64" \
     -archivePath "$ARCHIVE_PATH" \
     archive \
+    ARCHS=arm64 \
+    ONLY_ACTIVE_ARCH=NO \
+    EXCLUDED_ARCHS=x86_64 \
     CODE_SIGN_STYLE=Manual \
     CODE_SIGN_IDENTITY="$DEVELOPER_ID" \
-    OTHER_CODE_SIGN_FLAGS="--timestamp" \
-    2>&1 | tail -5
+    OTHER_CODE_SIGN_FLAGS="--timestamp"
 
 APP_IN_ARCHIVE="$ARCHIVE_PATH/Products/Applications/$APP_NAME.app"
 if [ ! -d "$APP_IN_ARCHIVE" ]; then
