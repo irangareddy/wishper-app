@@ -1,0 +1,87 @@
+name: Bug Report
+description: Something isn't working. Thanks for taking the time to file!
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please:
+        1. Check the [existing issues](https://github.com/irangareddy/wishper-app/issues?q=is%3Aissue) — someone may have hit the same thing.
+        2. Try **Settings → Report a Bug** in Wishper — it pre-fills a lot of the info below.
+        3. Attach a diagnostics bundle if you can (**Settings → Export Diagnostics**).
+
+  - type: input
+    id: version
+    attributes:
+      label: Wishper version
+      description: Settings → About → Version. Include the build number in parentheses.
+      placeholder: "0.5.3 (3)"
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      description: Apple menu →  About This Mac
+      placeholder: "macOS 26.2 (Sequoia)"
+    validations:
+      required: true
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: Apple menu →  About This Mac. Apple Silicon only — M1 / M2 / M3 / M4 etc.
+      placeholder: "MacBook Pro 14\" (M3 Pro), 36 GB"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you try to do? What did Wishper do (or not do)?
+      placeholder: |
+        I held the Right Command key and said "reply: thanks for the update" in Slack.
+        Wishper recorded but nothing was pasted.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      placeholder: The transcribed text should land in the Slack message box.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: As specific as you can. "Sometimes it breaks" is hard to fix.
+      placeholder: |
+        1. Open Slack, focus the message field
+        2. Hold Right Command
+        3. Say any sentence
+        4. Release
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics bundle
+      description: |
+        Drag the file exported from **Settings → Export Diagnostics** here. This includes:
+        your Wishper/macOS versions, recent log output, and model state — no personal data.
+        You can also drop in relevant lines from Console.app filtered by `process == "Wishper"`.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Anything else?
+      description: Related issues, screenshots, video, workarounds you found — anything useful.

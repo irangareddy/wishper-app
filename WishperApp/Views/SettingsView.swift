@@ -188,6 +188,34 @@ struct SettingsDetailView: View {
                 Text("Updates are signed with EdDSA and delivered via Sparkle.")
             }
 
+            // ── Support ──
+            Section {
+                Button {
+                    SupportTools.openBugReport()
+                } label: {
+                    Label("Report a Bug", systemImage: "ant.fill")
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    SupportTools.openFeedback()
+                } label: {
+                    Label("Send Feedback", systemImage: "bubble.left.and.bubble.right")
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    SupportTools.exportDiagnostics()
+                } label: {
+                    Label("Export Diagnostics", systemImage: "doc.text.magnifyingglass")
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Support")
+            } footer: {
+                Text("Bugs and feedback go to GitHub — public and searchable. Diagnostics stay local unless you share them.")
+            }
+
             // ── About ──
             Section {
                 LabeledContent("Version") {

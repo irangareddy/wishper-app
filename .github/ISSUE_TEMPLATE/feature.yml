@@ -1,0 +1,45 @@
+name: Feature Request
+description: Suggest an idea or improvement for Wishper.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Wishper is built by one person in spare time — not every request will land, but I read every one.
+        Please check [existing requests](https://github.com/irangareddy/wishper-app/issues?q=is%3Aissue+label%3Aenhancement) first to avoid duplicates.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the pain, not the solution. "I have to X every time" is great. Feature ideas that start from a real pain point land much better.
+      placeholder: Every time I want to dictate in a password field, the text ends up visible because Wishper pastes plaintext.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like Wishper to do?
+      placeholder: Detect when the focused field is a secure input and either skip dictation or mask the text.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      placeholder: I tried turning off Wishper before password fields but I keep forgetting.
+
+  - type: dropdown
+    id: core
+    attributes:
+      label: Does this fit Wishper's "100% on-device" principle?
+      description: Features that require a network call are hard to accept. If yours does, explain why it's worth it.
+      options:
+        - Yes, fully on-device
+        - Needs network, but here's why it's worth it (explain below)
+        - Not sure
+    validations:
+      required: true

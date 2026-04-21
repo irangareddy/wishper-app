@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Website
+    url: https://wishper.irangareddy.in
+    about: Product info and downloads.
+  - name: Releases
+    url: https://github.com/irangareddy/wishper-app/releases
+    about: Download the latest DMG, read release notes.

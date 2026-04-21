@@ -53,6 +53,16 @@ struct MenuBarMenu: View {
 
         Divider()
 
+        // Support
+        Button("Report a Bug") {
+            SupportTools.openBugReport()
+        }
+        Button("Send Feedback") {
+            SupportTools.openFeedback()
+        }
+
+        Divider()
+
         Button("Check for Updates…") {
             updater.checkForUpdates()
         }

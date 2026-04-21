@@ -27,7 +27,10 @@ mkdir -p "$OUT_DIR"
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION=$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")
-DMG_NAME="Wishper-${VERSION}.dmg"
+# Version-less filename so https://.../releases/latest/download/Wishper.dmg
+# always resolves. Version is still visible in the release title, the DMG
+# volume name, and the app's About pane.
+DMG_NAME="Wishper.dmg"
 DMG_PATH="$OUT_DIR/$DMG_NAME"
 STAGING=$(mktemp -d -t wishper-dmg)
 trap 'rm -rf "$STAGING"' EXIT
@@ -39,7 +42,7 @@ ln -s /Applications "$STAGING/Applications"
 echo "[dmg] creating $DMG_PATH"
 rm -f "$DMG_PATH"
 hdiutil create \
-    -volname "Wishper" \
+    -volname "Wishper $VERSION" \
     -srcfolder "$STAGING" \
     -ov -format UDZO \
     -fs HFS+ \

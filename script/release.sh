@@ -123,7 +123,7 @@ echo "[release] notarizing .app"
 
 echo "[release] building DMG"
 "$PROJECT_DIR/script/dmg.sh" "$APP_BUNDLE" "$RELEASE_DIR"
-DMG_PATH="$RELEASE_DIR/$APP_NAME-$VERSION.dmg"
+DMG_PATH="$RELEASE_DIR/$APP_NAME.dmg"
 
 # ---------- appcast ----------
 
