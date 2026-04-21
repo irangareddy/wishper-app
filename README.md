@@ -1,5 +1,9 @@
 # Wishper
 
+[![Latest release](https://img.shields.io/github/v/release/irangareddy/wishper-app?label=release&style=flat-square)](https://github.com/irangareddy/wishper-app/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/irangareddy/wishper-app/total?style=flat-square)](https://github.com/irangareddy/wishper-app/releases)
+[![License](https://img.shields.io/github/license/irangareddy/wishper-app?style=flat-square)](LICENSE)
+
 Voice-to-text that runs entirely on your Mac. Hold a hotkey, speak, your words land wherever your cursor is.
 
 [**Download**](https://github.com/irangareddy/wishper-app/releases/latest/download/Wishper.dmg) · [Website](https://wishper.irangareddy.in)
