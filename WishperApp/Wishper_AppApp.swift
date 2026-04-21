@@ -32,11 +32,12 @@ struct WishperApp: App {
         } label: {
             Group {
                 if appState.isRecording {
-                    Image(systemName: "waveform.circle.fill")
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .red)
+                    // Red-tinted template image reads as "live" in both light/dark bars
+                    Image("menubar_icon_1x")
+                        .foregroundStyle(.red)
                 } else {
-                    Image(systemName: "waveform.and.mic")
+                    // Template rendering — menu bar tints to match system appearance
+                    Image("menubar_icon_1x")
                 }
             }
             .onAppear {
